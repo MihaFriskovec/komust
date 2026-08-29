@@ -45,3 +45,21 @@ The set of source locations a run considers for mutation, expressed as **file �
 
 ### Enclosing symbol
 The nearest **member declaration** — function, property initializer, or `init` block — that contains a given source line. It is the unit a changed line **expands** to: when any line of a symbol is in scope, the whole symbol is in scope, because a one-line edit can shift the behaviour of its entire enclosing declaration. Lambdas and local functions belong to their host symbol, not their own. This keeps modified-files granularity at the function level — below the whole file, above the bare line.
+
+### Coverage pass
+A single, sequential run of the whole test suite over the **unmutated** program (all mutants inactive), instrumented by JaCoCo, that produces the **coverage index**. Run once per source snapshot and cached; it also serves as the mandatory **green baseline** (if it is not green, the run aborts). See ADR-0004.
+
+### Coverage index
+The `(binary class name, source line) → { test unique id }` map built from the coverage pass: for every covered source line, the set of JUnit Platform tests that executed it. The join surface between coverage and mutation. **Inline-function lines are normalised** when the index is built (callee declaration line ↔ call-site lines), so downstream lookups stay exact. See ADR-0004.
+
+### Covering test set
+For one mutant, the set of tests the coverage index maps to that mutant's `(class, line)` — the only tests that can possibly kill it, so the only tests komust runs against it. Absence of a covering test set is **not** a survivor; it is **no coverage**.
+
+### Test selection
+Choosing, per mutant, which tests to run. komust's default selection is **coverage-mapped**: the covering test set from the coverage index. An **explicit override** can replace it. Ordering *within* the selected set (fastest-first, fail-fast) is execution, not selection — see ADR-0003.
+
+### No coverage (mutant outcome)
+A mutant on a source line that **no test executes**. It is never run (there is nothing that could kill it) and is reported as `NO_COVERAGE`, distinct from a survivor. Because untested-yet-mutable code is a maximally actionable signal, `NO_COVERAGE` mutants are surfaced in the token-dense agent stream as their own category, not folded into survivors.
+
+### Explicit override (test selection)
+A caller-supplied pinning of the test set, at **global** granularity (one set for the whole run) and/or **per-file** granularity. Where an override applies to a mutant it **fully replaces** the coverage-derived covering set (never augments it) — the same replace-not-merge stance as the Mutation Scope override. The coverage pass still runs regardless (the green baseline is non-negotiable); an overridden mutant simply skips the coverage lookup and can therefore never be `NO_COVERAGE`. See ADR-0004.
