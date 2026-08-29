@@ -36,3 +36,12 @@ An operator whose inclusion is decided but whose clean expression in K2 IR is no
 
 ### Protected (construct)
 A Kotlin construct that komust intentionally leaves untouched — it is on the skip-list. Distinct from "not yet supported": protection is a deliberate correctness choice. `?.`, `!!`, and desugared null-checks are protected.
+
+### Modified-files run
+komust's default mode: only code that changed relative to a base ref is mutated, not the whole project. Serves the agent inner-loop (mutate what I just edited) and PR review (mutate what this branch changed). The opposite — mutating the entire project — is available but never the default.
+
+### Mutation Scope
+The set of source locations a run considers for mutation, expressed as **file → line ranges** (a whole file is the range covering all its lines). Every input path produces one Mutation Scope: the git-derived changeset and any explicit override normalise to the same shape. It is an *input filter*, not a list of mutants — the operator catalog still decides what is mutable within it. See ADR-0002.
+
+### Enclosing symbol
+The nearest **member declaration** — function, property initializer, or `init` block — that contains a given source line. It is the unit a changed line **expands** to: when any line of a symbol is in scope, the whole symbol is in scope, because a one-line edit can shift the behaviour of its entire enclosing declaration. Lambdas and local functions belong to their host symbol, not their own. This keeps modified-files granularity at the function level — below the whole file, above the bare line.
