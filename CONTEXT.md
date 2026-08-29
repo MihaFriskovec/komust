@@ -63,3 +63,21 @@ A mutant on a source line that **no test executes**. It is never run (there is n
 
 ### Explicit override (test selection)
 A caller-supplied pinning of the test set, at **global** granularity (one set for the whole run) and/or **per-file** granularity. Where an override applies to a mutant it **fully replaces** the coverage-derived covering set (never augments it) — the same replace-not-merge stance as the Mutation Scope override. The coverage pass still runs regardless (the green baseline is non-negotiable); an overridden mutant simply skips the coverage lookup and can therefore never be `NO_COVERAGE`. See ADR-0004.
+
+### Compiler plugin
+The **K2 IR** artifact (`komust-compiler-plugin`) that weaves mutants into a Kotlin compilation and injects the runtime guard (#2). It is the **mutation surface** — the only component that understands Kotlin IR — and is loaded into a Kotlin compile as a Kotlin compiler plugin. It knows nothing about test running, coverage, or the build tool.
+
+### Core engine
+The build-tool-agnostic orchestrator (`komust-engine`) that, given the **engine input contract**, runs the coverage pass (ADR-0004), the mutant sweep (ADR-0003), and emits the JSON output (agent contract, #5). It is the reusable heart of komust: the Gradle plugin and the deferred CLI both drive the *same* engine. It never touches Gradle APIs, and it drives test execution through the **JUnit Platform Launcher API** directly (not any build tool's test runner). See ADR-0005.
+
+### Engine input contract
+The build-tool-agnostic handoff the core engine consumes: the mutant-instrumented classes plus main runtime classpath, the test runtime classpath, the resolved **Mutation Scope**, and the resolved run configuration. Any adapter (the Gradle plugin today, the CLI later) that can produce this contract can drive the engine. See ADR-0005.
+
+### Gradle plugin
+The thin adapter (`komust-gradle-plugin`) that makes komust usable from a Gradle build: it wires the compiler plugin into a **mutation compilation**, invokes the **scope resolver**, discovers classpaths from the Gradle model, exposes the `komust {}` DSL and the `mutationTest` task, and then forks the core engine with the engine input contract. It contains no mutation, coverage, or execution logic — those live in the engine. See ADR-0005.
+
+### Scope resolver
+The shared module (`komust-scope`) that turns a git diff (or an explicit override) into a **Mutation Scope** and writes `scope.json`. Factored out of the Gradle plugin so the deferred CLI reuses the identical git→scope logic rather than reimplementing it (refines #6's placement without changing its behaviour). See ADR-0005.
+
+### Mutation compilation
+A **dedicated** Kotlin compilation of the project's production sources with the compiler plugin applied, producing the mutant-instrumented classes under `build/komust/`. Kept separate from the ordinary `compileKotlin` so a normal build never carries mutants and the incremental cache is never poisoned. The single artifact both the coverage pass (mutants off) and the sweep (mutants on) observe — the "one shared compile" of ADR-0004. See ADR-0005.
