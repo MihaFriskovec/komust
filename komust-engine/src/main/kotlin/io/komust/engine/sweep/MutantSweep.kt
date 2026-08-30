@@ -9,10 +9,13 @@ import kotlin.time.Duration
  *
  * For each mutant, in the order supplied:
  *
- *  1. **Select** its covering test set by a direct `(binaryClassName, line)`
- *     lookup into the coverage index (ADR-0004 §2). An empty set is
- *     [MutantStatus.NO_COVERAGE] — the mutant is never run and never counts as a
- *     survivor (ADR-0004 §4).
+ *  1. **Select** its covering test set. When a [testSelection] override applies
+ *     to the mutant (per-file, else global) that pinned set is used verbatim and
+ *     **fully replaces** the coverage-derived set (ADR-0004 §5). Otherwise it is
+ *     a direct `(binaryClassName, line)` lookup into the coverage index
+ *     (ADR-0004 §2); an empty result is [MutantStatus.NO_COVERAGE] — the mutant
+ *     is never run and never counts as a survivor (ADR-0004 §4). An overridden
+ *     mutant is never [MutantStatus.NO_COVERAGE] (an override pins ≥1 test).
  *  2. **Order** the covering tests **fastest-first** using the coverage pass's
  *     per-test timing, with the test id as a tie-break so the order is fully
  *     deterministic (a test with no recorded time sorts last).
@@ -31,11 +34,14 @@ import kotlin.time.Duration
  *   to the real JUnit Platform Launcher.
  * @param switch writes the runtime switch; defaults to the process-global slot
  *   resolved from the current context class loader.
+ * @param testSelection the `--tests` explicit override (ADR-0004 §5); defaults
+ *   to [TestSelectionOverride.NONE] — every mutant on coverage-mapped selection.
  */
 public class MutantSweep(
     private val coveragePass: CoveragePassResult,
     private val testRunner: CoveringTestRunner = JUnitPlatformCoveringTestRunner(),
     private val switch: MutantSwitchHandle = MutantSwitchHandle.processGlobal(),
+    private val testSelection: TestSelectionOverride = TestSelectionOverride.NONE,
 ) {
 
     /** Score every mutant in [mutants], sequentially, in the order given. */
@@ -43,8 +49,11 @@ public class MutantSweep(
         SweepResult(mutants.map(::score))
 
     private fun score(mutant: Mutant): MutantResult {
-        val covering = coveragePass.index.testsCovering(mutant.coverageKey)
-        if (covering.isEmpty()) return MutantResult.noCoverage(mutant)
+        // An override fully replaces the coverage-derived set (ADR-0004 §5) and,
+        // because it pins ≥1 test, keeps the mutant out of NO_COVERAGE.
+        val pinned = testSelection.testsFor(mutant)
+        val covering = pinned
+            ?: coveragePass.index.testsCovering(mutant.coverageKey).ifEmpty { return MutantResult.noCoverage(mutant) }
 
         val ordered = covering.sortedWith(
             compareBy({ coveragePass.timing(it) ?: Duration.INFINITE }, TestId::uniqueId),
@@ -55,7 +64,7 @@ public class MutantSweep(
             var executed = 0
             for (test in ordered) {
                 executed++
-                if (testRunner.run(test) == TestVerdict.FAILED) {
+                if (runOne(test, overridden = pinned != null) == TestVerdict.FAILED) {
                     return MutantResult.killed(mutant, ordered, killedBy = test, testsExecuted = executed)
                 }
             }
@@ -64,4 +73,16 @@ public class MutantSweep(
             switch.clear()
         }
     }
+
+    /**
+     * Runs one selected test, translating an unresolvable selector into the
+     * override-aware [UnknownPinnedTestException] when the set was pinned so the
+     * diagnosis points at the right input.
+     */
+    private fun runOne(test: TestId, overridden: Boolean): TestVerdict =
+        try {
+            testRunner.run(test)
+        } catch (e: UnresolvableCoveringTestException) {
+            if (overridden) throw UnknownPinnedTestException(e.test) else throw e
+        }
 }

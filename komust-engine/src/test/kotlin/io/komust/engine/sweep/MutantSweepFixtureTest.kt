@@ -72,7 +72,10 @@ class MutantSweepFixtureTest {
         MutantRegistry.clear()
     }
 
-    private fun runSweep(fixture: MutantFixtureProject): Pair<CoveragePassResult, SweepResult> {
+    private fun runSweep(
+        fixture: MutantFixtureProject,
+        overrideFrom: (CoveragePassResult) -> TestSelectionOverride = { TestSelectionOverride.NONE },
+    ): Pair<CoveragePassResult, SweepResult> {
         val previous = Thread.currentThread().contextClassLoader
         Thread.currentThread().contextClassLoader = fixture.classLoader
         try {
@@ -81,12 +84,17 @@ class MutantSweepFixtureTest {
                 pass,
                 JUnitPlatformCoveringTestRunner(),
                 MutantSwitchHandle.processGlobal(fixture.classLoader),
+                overrideFrom(pass),
             ).sweep(fixture.mutants)
             return pass to sweep
         } finally {
             Thread.currentThread().contextClassLoader = previous
         }
     }
+
+    /** The coverage-pass [io.komust.engine.coverage.TestId] whose method name is [method]. */
+    private fun CoveragePassResult.testId(method: String) =
+        tests.first { it.id.uniqueId.contains("$method(") }.id
 
     private fun fixture(tmp: Path) = MutantFixtureProject.compile(
         tmp.toFile().resolve("sweep"),
@@ -174,6 +182,49 @@ class MutantSweepFixtureTest {
             assertEquals(emptyList<Any>(), r.coveringTests)
             assertEquals(0, r.testsExecuted)
         }
+    }
+
+    @Test
+    fun `a global --tests override replaces the covering set -- a normally-killed mutant SURVIVES`(
+        @TempDir tmp: Path,
+    ) {
+        val fx = fixture(tmp)
+        // Pin the whole run to `mulLoose` only — it never asserts add's result.
+        val (pass, sweep) = runSweep(fx) { TestSelectionOverride.of(global = setOf(it.testId("mulLoose"))) }
+
+        // The green coverage pass still ran despite the override (ADR-0004 §5).
+        assertTrue(pass.testCount > 0, "coverage pass executed the suite")
+        assertTrue(pass.index.size > 0, "coverage index was still built")
+
+        val add = fx.mutantsOn("Calc.kt", "a + b").first()
+        val r = sweep.forMutant(add.id)!!
+        assertEquals(MutantStatus.SURVIVED, r.status, "override excludes addFastExact, the only test that kills it")
+        assertEquals(listOf("mulLoose"), r.coveringTests.map(::shortName))
+        assertNull(r.killedBy)
+    }
+
+    @Test
+    fun `an overridden mutant in an uncovered method is never NO_COVERAGE`(@TempDir tmp: Path) {
+        val fx = fixture(tmp)
+        val (_, sweep) = runSweep(fx) { TestSelectionOverride.of(global = setOf(it.testId("mulLoose"))) }
+
+        val unused = fx.mutantsOn("Calc.kt", "unused").first()
+        val r = sweep.forMutant(unused.id)!!
+        assertTrue(r.status != MutantStatus.NO_COVERAGE, "the pinned test replaces the (empty) covering set")
+        assertEquals(listOf("mulLoose"), r.coveringTests.map(::shortName))
+    }
+
+    @Test
+    fun `a per-file --tests override replaces the covering set for that file's mutants`(@TempDir tmp: Path) {
+        val fx = fixture(tmp)
+        val (_, sweep) = runSweep(fx) {
+            TestSelectionOverride.of(perFile = mapOf("Calc.kt" to setOf(it.testId("mulLoose"))))
+        }
+
+        val add = fx.mutantsOn("Calc.kt", "a + b").first()
+        val r = sweep.forMutant(add.id)!!
+        assertEquals(MutantStatus.SURVIVED, r.status)
+        assertEquals(listOf("mulLoose"), r.coveringTests.map(::shortName))
     }
 
     @Test
