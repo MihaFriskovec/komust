@@ -1,9 +1,12 @@
 name: build
 
+# Disabled for now — manual runs only. To re-enable automatic CI, uncomment the
+# push / pull_request triggers below.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  # pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
