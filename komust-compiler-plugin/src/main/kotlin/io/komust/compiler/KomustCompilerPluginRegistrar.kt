@@ -12,10 +12,10 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
  * `kotlinCompilerPluginClasspath` in a real build, or `kotlin-compile-testing`
  * in this module's tests.
  *
- * It resolves the [OperatorConfig] from the plugin options the
- * [KomustCommandLineProcessor] parsed, then registers the
+ * It resolves the [OperatorConfig] and the [MutationScopeFilter] from the plugin
+ * options the [KomustCommandLineProcessor] parsed, then registers the
  * [KomustIrGenerationExtension] that weaves the default operator catalog
- * (ADR-0001) with the compile-once model.
+ * (ADR-0001), filtered to the Mutation Scope (#30), with the compile-once model.
  *
  * Per the compat-shim seam rule, this class imports only the SPI types it
  * subclasses and its override signature; message plumbing, extension
@@ -34,6 +34,13 @@ public class KomustCompilerPluginRegistrar : CompilerPluginRegistrar() {
                 diagnostics.warn("komust: unknown operator slug '$slug' in the enabled/disabled-operators option — ignoring.")
             },
         )
-        KotlinIrCompat.registerIrExtension(this, KomustIrGenerationExtension(diagnostics, config))
+        val scopeFilter = MutationScopeFilter.from(
+            configuration.get(KomustCommandLineProcessor.KEY_SCOPE_PATH),
+            diagnostics,
+        )
+        KotlinIrCompat.registerIrExtension(
+            this,
+            KomustIrGenerationExtension(diagnostics, config, scopeFilter),
+        )
     }
 }

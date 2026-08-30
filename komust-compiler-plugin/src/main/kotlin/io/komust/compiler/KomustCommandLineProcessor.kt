@@ -20,9 +20,9 @@ import org.jetbrains.kotlin.config.CompilerConfigurationKey
  *    default-on set (the `operators { disable(...) }` DSL, ADR-0005).
  *  - `enabledOperators` — comma-separated slugs added on top (the opt-in path
  *    for experimental-tier operators; `operators { enable(...) }`).
- *
- * #30 adds the `scope` option (the `scope.json` path for enclosing-symbol
- * expansion) on the same surface.
+ *  - `scope` — path to the resolved `scope.json` for enclosing-symbol expansion
+ *    (#30, ADR-0002 §3). Single-valued; absent ⇒ the whole module is woven
+ *    (the `--all` run).
  *
  * [pluginId] is the namespace every option is addressed under
  * (`-P plugin:io.komust.compiler:<key>=<value>`); it must match the
@@ -47,6 +47,13 @@ public class KomustCommandLineProcessor : CommandLineProcessor {
             required = false,
             allowMultipleOccurrences = true,
         ),
+        CliOption(
+            optionName = OPTION_SCOPE,
+            valueDescription = "<path>",
+            description = "Path to the resolved scope.json for enclosing-symbol expansion",
+            required = false,
+            allowMultipleOccurrences = false,
+        ),
     )
 
     override fun processOption(option: AbstractCliOption, value: String, configuration: CompilerConfiguration) {
@@ -55,6 +62,8 @@ public class KomustCommandLineProcessor : CommandLineProcessor {
                 configuration.appendCsv(KEY_DISABLED_OPERATORS, value)
             OPTION_ENABLED_OPERATORS ->
                 configuration.appendCsv(KEY_ENABLED_OPERATORS, value)
+            OPTION_SCOPE ->
+                configuration.put(KEY_SCOPE_PATH, value)
             else -> Unit
         }
     }
@@ -70,10 +79,13 @@ public class KomustCommandLineProcessor : CommandLineProcessor {
 
         internal const val OPTION_DISABLED_OPERATORS: String = "disabledOperators"
         internal const val OPTION_ENABLED_OPERATORS: String = "enabledOperators"
+        internal const val OPTION_SCOPE: String = "scope"
 
         internal val KEY_DISABLED_OPERATORS: CompilerConfigurationKey<List<String>> =
             CompilerConfigurationKey.create("komust disabled operator slugs")
         internal val KEY_ENABLED_OPERATORS: CompilerConfigurationKey<List<String>> =
             CompilerConfigurationKey.create("komust enabled operator slugs")
+        internal val KEY_SCOPE_PATH: CompilerConfigurationKey<String> =
+            CompilerConfigurationKey.create("komust scope.json path")
     }
 }

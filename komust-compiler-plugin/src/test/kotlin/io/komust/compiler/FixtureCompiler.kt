@@ -27,6 +27,13 @@ object FixtureCompiler {
     private val runtimeClasspath: File =
         File(MutantRegistry::class.java.protectionDomain.codeSource.location.toURI())
 
+    /**
+     * [scopeJson] — when non-null — is written to `scope.json` in the
+     * compilation working dir and its path passed as the `scope` SubpluginOption,
+     * exercising enclosing-symbol expansion (#30). [scopeOptionValue] passes a
+     * raw option value verbatim (no file written) — for the missing-/invalid-path
+     * cases. At most one of the two is set.
+     */
     fun compile(
         fileName: String,
         source: String,
@@ -35,7 +42,12 @@ object FixtureCompiler {
         disabledOperators: List<String> = emptyList(),
         enabledOperators: List<String> = emptyList(),
         extraFiles: List<Pair<String, String>> = emptyList(),
+        scopeJson: String? = null,
+        scopeOptionValue: String? = null,
     ): Compiled {
+        require(scopeJson == null || scopeOptionValue == null) {
+            "pass at most one of scopeJson / scopeOptionValue"
+        }
         val compilation = KotlinCompilation().apply {
             sources = listOf(SourceFile.kotlin(fileName, source)) +
                 extraFiles.map { (name, text) -> SourceFile.kotlin(name, text) }
@@ -48,12 +60,17 @@ object FixtureCompiler {
                 // is IR-extension order, so an inspector sees the woven tree.
                 compilerPluginRegistrars = listOf(KomustCompilerPluginRegistrar()) + extraRegistrars
                 commandLineProcessors = listOf(KomustCommandLineProcessor())
+                val scopeValue = scopeOptionValue
+                    ?: scopeJson?.let { workingDir.resolve("scope.json").apply { writeText(it) }.absolutePath }
                 pluginOptions = buildList {
                     disabledOperators.forEach {
                         add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "disabledOperators", it))
                     }
                     enabledOperators.forEach {
                         add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "enabledOperators", it))
+                    }
+                    if (scopeValue != null) {
+                        add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "scope", scopeValue))
                     }
                 }
             }

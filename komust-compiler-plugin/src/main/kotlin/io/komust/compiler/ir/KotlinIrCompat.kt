@@ -1,6 +1,7 @@
 package io.komust.compiler.ir
 
 import io.komust.compiler.MutationOperatorId
+import io.komust.compiler.MutationScopeFilter
 import io.komust.compiler.OperatorConfig
 import io.komust.compiler.WovenMutant
 import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
@@ -12,6 +13,7 @@ import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irBoolean
 import org.jetbrains.kotlin.ir.builders.irCall
@@ -23,6 +25,7 @@ import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.declarations.IrAnnotationContainer
+import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
@@ -112,8 +115,9 @@ import java.io.File
  *
  * The full default operator catalog (ADR-0001, #29) lives here as
  * [weaveMutations] and its private [MutationWeaver]: the traversal, the
- * operand-kind lookups, the runtime-switched `if/else` construction and the
- * skip-list guards are all IR-API contact, so they sit inside the seam and
+ * operand-kind lookups, the runtime-switched `if/else` construction, the
+ * skip-list guards and the enclosing-symbol expansion that filters sites to the
+ * Mutation Scope (#30) are all IR-API contact, so they sit inside the seam and
  * [io.komust.compiler.KomustIrGenerationExtension] only orchestrates.
  */
 internal object KotlinIrCompat {
@@ -164,12 +168,19 @@ internal object KotlinIrCompat {
      * Returns the [WovenMutant]s injected, in traversal order. If the runtime
      * guard is not on the compilation classpath nothing is woven and a warning
      * is reported.
+     *
+     * [scopeFilter] gates weaving by the **Mutation Scope** (#30): a site is
+     * woven only when its nearest enclosing member declaration's source-line
+     * span intersects a changed range. An
+     * [unfiltered][MutationScopeFilter.unfiltered] filter (no `scope.json`, the
+     * `--all` run) weaves the whole module.
      */
     fun weaveMutations(
         module: IrModuleFragment,
         pluginContext: IrPluginContext,
         diagnostics: PluginDiagnostics,
         config: OperatorConfig,
+        scopeFilter: MutationScopeFilter,
     ): List<WovenMutant> {
         val mutantActive = pluginContext
             .referenceFunctions(CallableId(RUNTIME_PACKAGE, Name.identifier("mutantActive")))
@@ -183,7 +194,7 @@ internal object KotlinIrCompat {
             return emptyList()
         }
 
-        val weaver = MutationWeaver(pluginContext, diagnostics, config, mutantActive)
+        val weaver = MutationWeaver(pluginContext, diagnostics, config, scopeFilter, mutantActive)
         module.transformChildrenVoid(weaver)
         // The guard temporaries (`%→/` / `*→/`) are fresh IrVariables; re-anchor
         // every declaration's parent so later lowerings (const evaluation) don't
@@ -251,6 +262,7 @@ internal object KotlinIrCompat {
         private val pluginContext: IrPluginContext,
         private val diagnostics: PluginDiagnostics,
         private val config: OperatorConfig,
+        private val scopeFilter: MutationScopeFilter,
         private val mutantActive: IrSimpleFunctionSymbol,
     ) : IrElementTransformerVoidWithContext() {
 
@@ -685,6 +697,9 @@ internal object KotlinIrCompat {
             val path = filePath(file)
             val (line, column) = lineColumn(file, original.startOffset)
             if (isSuppressed(line)) return original
+            // Enclosing-symbol expansion (#30): a site is in scope only when its
+            // nearest enclosing member declaration intersects a changed range.
+            if (!scopeFilter.unfiltered && !enclosingSymbolInScope(file)) return original
 
             val fileName = path.substringAfterLast('/')
             var acc: IrExpression = original
@@ -736,6 +751,46 @@ internal object KotlinIrCompat {
                 ?: return false
             if (function.origin != IrDeclarationOrigin.DEFINED) return true
             return (function as? IrSimpleFunction)?.correspondingPropertySymbol != null
+        }
+
+        /**
+         * Enclosing-symbol expansion (#30, ADR-0002 §3): whether the current
+         * site's **nearest enclosing member declaration** intersects the Mutation
+         * Scope. When any line of that declaration is a changed line, every
+         * mutation point in it is woven — a one-line edit can shift the whole
+         * declaration's behaviour. A site with no locatable enclosing declaration
+         * is out of scope: komust never mutates code it cannot place.
+         */
+        private fun enclosingSymbolInScope(file: IrFile): Boolean {
+            val span = enclosingSymbolLineSpan(file) ?: return false
+            return scopeFilter.enclosesChange(filePath(file), span.first, span.second)
+        }
+
+        /**
+         * The 1-based, inclusive source-line span of the site's nearest enclosing
+         * **member declaration** — a member/top-level function, a property
+         * initializer (its backing field), or an `init` block (CONTEXT.md,
+         * "Enclosing symbol"). Local functions and lambdas are **transparent**:
+         * the walk steps over them so a site inside one is judged by its host
+         * member's span (ADR-0002 §3); a candidate whose offsets are
+         * undefined/synthetic is skipped too, so an outer locatable member still
+         * wins. `null` only when no locatable enclosing member is found.
+         */
+        private fun enclosingSymbolLineSpan(file: IrFile): Pair<Int, Int>? {
+            val entry = file.fileEntry
+            for (scope in allScopes.asReversed()) {
+                val enclosing = when (val element = scope.irElement) {
+                    is IrFunction ->
+                        if (element.visibility == DescriptorVisibilities.LOCAL) null else element
+                    is IrField -> element
+                    is IrAnonymousInitializer -> element
+                    else -> null
+                } ?: continue
+                if (enclosing.startOffset < 0 || enclosing.endOffset < 0) continue
+                return (entry.getLineNumber(enclosing.startOffset) + 1) to
+                    (entry.getLineNumber(enclosing.endOffset) + 1)
+            }
+            return null
         }
 
         /**

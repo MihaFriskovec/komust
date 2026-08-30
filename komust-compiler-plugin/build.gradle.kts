@@ -20,6 +20,14 @@ dependencies {
     // Provided by the Kotlin compiler at plugin-load time; never shipped.
     compileOnly(libs.kotlin.compiler.embeddable)
 
+    // The plugin reads the resolved scope.json passed as a SubpluginOption (#30,
+    // ADR-0002 §3). `komust-scope` owns the format (its `ScopeJson` is the single
+    // implementation — docs/scope-json.md), so the plugin reuses it rather than
+    // re-parsing. This puts `komust-scope` + kotlinx.serialization on the Kotlin
+    // compiler-plugin classpath; only the pure `MutationScope` / `ScopeJson`
+    // types are touched at compile time (never the git code).
+    implementation(project(":komust-scope"))
+
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

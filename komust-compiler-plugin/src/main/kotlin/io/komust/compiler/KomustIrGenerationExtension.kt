@@ -18,7 +18,9 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
  * name.
  *
  * The [config] narrows the catalog to the operators the Gradle plugin's
- * `operators { enable / disable }` DSL left on.
+ * `operators { enable / disable }` DSL left on; [scopeFilter] narrows the sites
+ * to those whose nearest enclosing member declaration intersects a changed range
+ * (#30, ADR-0002 §3). With no `scope.json` the whole module is woven.
  *
  * The traversal, operand-kind lookups, skip-list guards and IR construction all
  * live behind the compat-shim seam ([KotlinIrCompat.weaveMutations]); this class
@@ -28,11 +30,12 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 internal class KomustIrGenerationExtension(
     private val diagnostics: PluginDiagnostics,
     private val config: OperatorConfig,
+    private val scopeFilter: MutationScopeFilter,
 ) : IrGenerationExtension {
 
     override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
         val module = KotlinIrCompat.moduleName(moduleFragment)
-        val woven = KotlinIrCompat.weaveMutations(moduleFragment, pluginContext, diagnostics, config)
+        val woven = KotlinIrCompat.weaveMutations(moduleFragment, pluginContext, diagnostics, config, scopeFilter)
 
         for (mutant in woven) {
             diagnostics.info(
