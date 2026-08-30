@@ -260,6 +260,25 @@ class ScopeResolverGitTest {
     }
 
     @Test
+    fun `--since a diverged branch scopes to the divergence point, not the branch tip`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        fixture.checkoutNewBranch("feature")
+        fixture.write(fooKt, original.replace("fun c(): Int = 3", "fun c(): Int = 33"))
+        fixture.add(fooKt).commit("feature edits c")
+        fixture.checkout("main")
+        fixture.checkoutNewBranch("other")
+        fixture.write(fooKt, original.replace("fun a(): Int = 1", "fun a(): Int = 11"))
+        fixture.add(fooKt).commit("other edits a")
+        fixture.checkout("feature")
+
+        val scope = fixture.resolveScope(ScopeSpec.Git(since = "other"))
+
+        // merge-base(feature, other) is the common root: only feature's own change
+        // shows — 'other's line-4 edit is on the far side and is not a reverted diff.
+        assertEquals(listOf(LineRange(6, 6)), scope.ranges(fooKt))
+    }
+
+    @Test
     fun `--since with an unknown ref fails clearly`() {
         val fixture = GitFixture.create(mapOf(fooKt to original))
 

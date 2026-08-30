@@ -15,10 +15,10 @@ import java.nio.file.Path
  *    merge-base with the default branch. `--since` swaps the ref that
  *    merge-base is taken with, without otherwise changing git resolution.
  *  - [Files] — `--files <globs>`: whole-file sugar.
- *  - [ScopeFileDocument] — `--scope <file.json>`: precise line ranges passed
- *    straight through (the agent's deterministic path).
+ *  - [ScopeFile] — `--scope <file.json>`: precise line ranges passed straight
+ *    through (the agent's deterministic path).
  *
- * **Precedence is structural.** An explicit override ([Files] / [ScopeFileDocument])
+ * **Precedence is structural.** An explicit override ([Files] / [ScopeFile])
  * *fully replaces* git — git is never consulted when one is present (ADR-0002).
  * Because the overrides and the git default are distinct variants of this
  * sealed type, "an override plus git" is unrepresentable: the caller resolves
@@ -55,13 +55,10 @@ sealed interface ScopeSpec {
 
     /**
      * `--scope <file.json>`: read the [MutationScope] straight out of a
-     * `scope.json` document at [path]. The ranges are passed through unchanged
-     * (only re-normalised: sorted, merged, path-sorted). Git is not consulted.
+     * `scope.json` document at [path]. Line ranges are passed through unchanged
+     * (only re-normalised: sorted, merged, path-sorted); entries that are not
+     * production Kotlin are dropped, the same filter the other producers apply.
+     * Git is not consulted.
      */
-    data class ScopeFileDocument(val path: Path) : ScopeSpec
-
-    companion object {
-        /** The zero-config default: git-derived, default-branch base ref. */
-        val GIT_DEFAULT: ScopeSpec = Git()
-    }
+    data class ScopeFile(val path: Path) : ScopeSpec
 }

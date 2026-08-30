@@ -67,6 +67,10 @@ data class MutationScope(val files: List<ScopeEntry>) {
                 .sortedBy { it.path }
             return MutationScope(entries)
         }
+
+        /** A scope in which every path in [paths] is in scope **whole**. */
+        fun ofWholeFiles(paths: Iterable<String>): MutationScope =
+            of(paths.associateWith { listOf(LineRange.WHOLE_FILE) })
     }
 }
 

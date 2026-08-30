@@ -82,7 +82,7 @@ class ScopeResolver(private val config: ScopeConfig = ScopeConfig()) {
             is ScopeSpec.Git ->
                 resolveGit(GitClient(root, config.gitExecutable), spec.since)
             is ScopeSpec.Files -> resolveFiles(root, spec.globs)
-            is ScopeSpec.ScopeFileDocument -> readScopeDocument(spec.path)
+            is ScopeSpec.ScopeFile -> readScopeDocument(spec.path)
         }
 
     /** The zero-config path: git-derived scope against the default branch. */
@@ -161,10 +161,14 @@ class ScopeResolver(private val config: ScopeConfig = ScopeConfig()) {
 
         val mergeBase = git.run("merge-base", "HEAD", target)
         if (!mergeBase.ok) {
-            val what = if (since != null) "--since ref '$since'" else "'$target'"
             throw ScopeResolutionException(
-                "HEAD and $what have no common ancestor, so there is no " +
-                    "merge-base to diff against; set an explicit base ref",
+                if (since != null) {
+                    "HEAD and --since ref '$since' have no common ancestor; pick a ref " +
+                        "on the same history"
+                } else {
+                    "HEAD and '$target' have no common ancestor, so there is no " +
+                        "merge-base to diff against; pass --since with a ref on this history"
+                },
             )
         }
         return mergeBase.stdout.trim()
@@ -192,33 +196,30 @@ class ScopeResolver(private val config: ScopeConfig = ScopeConfig()) {
      */
     private fun resolveFiles(root: Path, globs: List<String>): MutationScope {
         val candidates = productionKotlinFilesUnder(root)
-        val fragments = HashMap<String, List<LineRange>>()
+        val matched = LinkedHashSet<String>()
         for (pattern in globs) {
             val glob = PathGlob(pattern)
-            val matched = candidates.filter { glob.matches(it) }
-            if (matched.isEmpty()) {
+            val hits = candidates.filter(glob::matches)
+            if (hits.isEmpty()) {
                 throw ScopeResolutionException(
                     "--files pattern '$pattern' matched no production Kotlin source under $root",
                 )
             }
-            matched.forEach { fragments[it] = listOf(LineRange.WHOLE_FILE) }
+            matched += hits
         }
-        return MutationScope.of(fragments)
+        return MutationScope.ofWholeFiles(matched)
     }
 
     /** Repo-root-relative, `/`-separated paths of every production Kotlin file. */
     private fun productionKotlinFilesUnder(root: Path): List<String> {
         val paths = ArrayList<String>()
         Files.walkFileTree(root, object : SimpleFileVisitor<Path>() {
-            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
-                if (dir == root) return FileVisitResult.CONTINUE
-                val name = dir.name
-                return if (name.startsWith(".") || name in config.filter.excludedDirs) {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
+                if (dir != root && config.filter.prunesDirectory(dir.name)) {
                     FileVisitResult.SKIP_SUBTREE
                 } else {
                     FileVisitResult.CONTINUE
                 }
-            }
 
             override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
                 val rel = root.relativize(file).joinToString("/")
@@ -235,7 +236,12 @@ class ScopeResolver(private val config: ScopeConfig = ScopeConfig()) {
         if (!Files.isRegularFile(path)) {
             throw ScopeResolutionException("--scope file '$path' does not exist")
         }
-        return ScopeJson.read(path)
+        val document = ScopeJson.read(path)
+        // Drop anything that is not production Kotlin — the same filter the git
+        // and --files producers apply (ADR-0002). The agent's line ranges within
+        // a production file are untouched.
+        val kept = document.files.filter { config.filter.accepts(it.path) }
+        return if (kept.size == document.files.size) document else MutationScope(kept)
     }
 
     // --- shared ----------------------------------------------------------

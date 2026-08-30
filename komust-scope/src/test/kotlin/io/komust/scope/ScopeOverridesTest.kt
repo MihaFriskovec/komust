@@ -98,7 +98,7 @@ class ScopeOverridesTest {
             doc,
         )
 
-        val scope = fixture.resolveScope(ScopeSpec.ScopeFileDocument(doc))
+        val scope = fixture.resolveScope(ScopeSpec.ScopeFile(doc))
 
         assertEquals(listOf(LineRange(4, 6), LineRange(20, 24)), scope.ranges(fooKt))
     }
@@ -111,10 +111,50 @@ class ScopeOverridesTest {
         val doc = fixture.root.resolve("agent-scope.json")
         ScopeJson.write(MutationScope.of(mapOf(barKt to listOf(LineRange(1, 3)))), doc)
 
-        val scope = fixture.resolveScope(ScopeSpec.ScopeFileDocument(doc))
+        val scope = fixture.resolveScope(ScopeSpec.ScopeFile(doc))
 
         // Only what the document names — Foo's real git change is not consulted.
         assertEquals(listOf(barKt), scope.files.map { it.path })
+    }
+
+    @Test
+    fun `--scope carries a whole-file entry through`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        val doc = fixture.root.resolve("agent-scope.json")
+        ScopeJson.write(MutationScope.ofWholeFiles(listOf(fooKt)), doc)
+
+        val scope = fixture.resolveScope(ScopeSpec.ScopeFile(doc))
+
+        assertTrue(scope.files.single().isWholeFile)
+    }
+
+    @Test
+    fun `--scope drops entries that are not production Kotlin`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        val doc = fixture.root.resolve("agent-scope.json")
+        ScopeJson.write(
+            MutationScope.of(
+                mapOf(
+                    fooKt to listOf(LineRange(4, 4)),
+                    "src/test/kotlin/com/example/FooTest.kt" to listOf(LineRange(1, 1)),
+                ),
+            ),
+            doc,
+        )
+
+        val scope = fixture.resolveScope(ScopeSpec.ScopeFile(doc))
+
+        assertEquals(listOf(fooKt), scope.files.map { it.path })
+    }
+
+    @Test
+    fun `--scope on a malformed document is an error`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        val doc = fixture.root.resolve("agent-scope.json").also { it.toFile().writeText("{ not json") }
+
+        assertThrows<ScopeResolutionException> {
+            fixture.resolveScope(ScopeSpec.ScopeFile(doc))
+        }
     }
 
     @Test
@@ -122,7 +162,7 @@ class ScopeOverridesTest {
         val fixture = GitFixture.create(mapOf(fooKt to original))
 
         val ex = assertThrows<ScopeResolutionException> {
-            fixture.resolveScope(ScopeSpec.ScopeFileDocument(fixture.root.resolve("absent.json")))
+            fixture.resolveScope(ScopeSpec.ScopeFile(fixture.root.resolve("absent.json")))
         }
         assertTrue(ex.message!!.contains("does not exist"))
     }
@@ -136,7 +176,7 @@ class ScopeOverridesTest {
             doc,
         )
 
-        val scope = ScopeResolver().resolveAndWrite(fixture.root, ScopeSpec.ScopeFileDocument(doc))
+        val scope = ScopeResolver().resolveAndWrite(fixture.root, ScopeSpec.ScopeFile(doc))
 
         val written = fixture.root.resolve("build/komust/scope.json")
         assertTrue(written.exists())
