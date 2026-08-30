@@ -24,16 +24,29 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
  * orchestrates and reports. Per the seam rule it imports only the SPI interface
  * it implements and its `generate` signature.
  *
+ * ## Scope filtering (#30)
+ *
+ * [scopeFilter] carries the resolved **Mutation Scope** (from the `scope.json`
+ * `SubpluginOption`). Only sites whose nearest enclosing member declaration
+ * intersects a changed range are woven; with no `scope.json` the whole module is
+ * woven (the `--all` run).
+ *
  * The wider catalog (multiplicative / remainder rewrites, the skip-list guards)
  * and the enabled/disabled-operator option land with #29.
  */
 internal class KomustIrGenerationExtension(
     private val diagnostics: PluginDiagnostics,
+    private val scopeFilter: MutationScopeFilter,
 ) : IrGenerationExtension {
 
     override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
         val module = KotlinIrCompat.moduleName(moduleFragment)
-        val woven = KotlinIrCompat.weaveArithmeticOperators(moduleFragment, pluginContext, diagnostics)
+        val woven = KotlinIrCompat.weaveArithmeticOperators(
+            moduleFragment,
+            pluginContext,
+            diagnostics,
+            scopeFilter,
+        )
 
         for (mutant in woven) {
             diagnostics.info(

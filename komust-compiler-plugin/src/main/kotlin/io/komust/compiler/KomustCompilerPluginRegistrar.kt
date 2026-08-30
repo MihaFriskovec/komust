@@ -14,7 +14,9 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
  *
  * It registers the [KomustIrGenerationExtension] and nothing else. As of #28
  * that extension weaves the first operator — the arithmetic additive swap — into
- * the module with the compile-once model.
+ * the module with the compile-once model; #30 adds Mutation-Scope filtering,
+ * fed from the `scope.json` path passed as a `SubpluginOption` and read here
+ * into a [MutationScopeFilter].
  *
  * Per the compat-shim seam rule, this class imports only the SPI type it
  * subclasses and its override signature; message and registration plumbing go
@@ -26,6 +28,10 @@ public class KomustCompilerPluginRegistrar : CompilerPluginRegistrar() {
 
     override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
         val diagnostics = KotlinIrCompat.pluginDiagnostics(configuration)
-        KotlinIrCompat.registerIrExtension(this, KomustIrGenerationExtension(diagnostics))
+        val scopeFilter = MutationScopeFilter.from(
+            KotlinIrCompat.configuredScopePath(configuration),
+            diagnostics,
+        )
+        KotlinIrCompat.registerIrExtension(this, KomustIrGenerationExtension(diagnostics, scopeFilter))
     }
 }

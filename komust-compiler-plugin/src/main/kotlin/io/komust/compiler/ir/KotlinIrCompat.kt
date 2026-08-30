@@ -1,6 +1,7 @@
 package io.komust.compiler.ir
 
 import io.komust.compiler.ArithmeticMutation
+import io.komust.compiler.MutationScopeFilter
 import io.komust.compiler.WovenMutant
 import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
@@ -8,17 +9,24 @@ import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.lower.DeclarationIrBuilder
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
+import org.jetbrains.kotlin.compiler.plugin.AbstractCliOption
+import org.jetbrains.kotlin.compiler.plugin.CliOption
+import org.jetbrains.kotlin.compiler.plugin.CliOptionProcessingException
 import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.CompilerConfigurationKey
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irIfThenElse
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.builders.irTemporary
+import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
@@ -103,6 +111,46 @@ internal object KotlinIrCompat {
         with(storage) { IrGenerationExtension.registerExtension(extension) }
     }
 
+    // --- Compile-time option surface (#30) --------------------------------
+
+    /**
+     * The name of komust's scope option — the resolved `scope.json` path,
+     * addressed as `-P plugin:io.komust.compiler:scope=<path>` (or the matching
+     * `SubpluginOption` key the Gradle plugin emits, ADR-0005 §3).
+     */
+    const val SCOPE_OPTION: String = "scope"
+
+    private val SCOPE_PATH_KEY: CompilerConfigurationKey<String> =
+        CompilerConfigurationKey.create("komust scope.json path")
+
+    /**
+     * The CLI options komust's [io.komust.compiler.KomustCommandLineProcessor]
+     * declares. One today: the `scope.json` path for enclosing-symbol expansion
+     * (#30). #29 adds the enabled/disabled-operators option here too.
+     */
+    fun komustCliOptions(): List<AbstractCliOption> = listOf(
+        CliOption(
+            optionName = SCOPE_OPTION,
+            valueDescription = "<path>",
+            description = "Path to the resolved scope.json. Present: only declarations whose source-line " +
+                "span intersects a changed range are woven. Absent: the whole module is woven.",
+            required = false,
+            allowMultipleOccurrences = false,
+        ),
+    )
+
+    /** Route a processed CLI option into [configuration]; an unknown name is a hard error. */
+    fun applyCliOption(optionName: String, value: String, configuration: CompilerConfiguration) {
+        when (optionName) {
+            SCOPE_OPTION -> configuration.put(SCOPE_PATH_KEY, value)
+            else -> throw CliOptionProcessingException("unknown komust plugin option '$optionName'")
+        }
+    }
+
+    /** The `scope.json` path passed to this compilation, or `null` for a whole-module run. */
+    fun configuredScopePath(configuration: CompilerConfiguration): String? =
+        configuration.get(SCOPE_PATH_KEY)
+
     // --- Source-location + IR-traversal primitives --------------------------
 
     /** 1-based `(line, column)` of [offset] within [file]. */
@@ -128,11 +176,18 @@ internal object KotlinIrCompat {
      * guard is not on the compilation classpath nothing is woven and a warning
      * is reported (the guard ships in `komust-compiler-plugin`; a misconfigured
      * mutation compilation is the only way it goes missing).
+     *
+     * [scopeFilter] gates weaving by the **Mutation Scope** (#30): a site is
+     * woven only when its nearest enclosing member declaration's source-line
+     * span intersects a changed range. An [unfiltered][MutationScopeFilter.unfiltered]
+     * filter (no `scope.json` — the `--all` run) weaves the whole module, as
+     * before #30.
      */
     fun weaveArithmeticOperators(
         module: IrModuleFragment,
         pluginContext: IrPluginContext,
         diagnostics: PluginDiagnostics,
+        scopeFilter: MutationScopeFilter,
     ): List<WovenMutant> {
         val mutantActive = pluginContext
             .referenceFunctions(CallableId(RUNTIME_PACKAGE, Name.identifier("mutantActive")))
@@ -146,7 +201,7 @@ internal object KotlinIrCompat {
             return emptyList()
         }
 
-        val weaver = ArithmeticWeaver(pluginContext, diagnostics, mutantActive)
+        val weaver = ArithmeticWeaver(pluginContext, diagnostics, mutantActive, scopeFilter)
         module.transformChildrenVoid(weaver)
         return weaver.woven
     }
@@ -184,6 +239,7 @@ internal object KotlinIrCompat {
         private val pluginContext: IrPluginContext,
         private val diagnostics: PluginDiagnostics,
         private val mutantActive: IrSimpleFunctionSymbol,
+        private val scopeFilter: MutationScopeFilter,
     ) : IrElementTransformerVoidWithContext() {
 
         val woven = mutableListOf<WovenMutant>()
@@ -213,6 +269,7 @@ internal object KotlinIrCompat {
             if (receiverClassId.packageFqName != KOTLIN_PACKAGE) return visited
             if (receiverClassId.shortClassName.asString() !in NUMERIC_PRIMITIVES) return visited
             if (inSkippedDeclaration()) return visited
+            if (!scopeFilter.unfiltered && !enclosingSymbolInScope()) return visited
 
             val dispatchIndex = callee.parameters.indexOfFirst { it.kind == IrParameterKind.DispatchReceiver }
             val operandIndex = callee.parameters.indexOfFirst { it.kind == IrParameterKind.Regular }
@@ -298,6 +355,52 @@ internal object KotlinIrCompat {
                 ?: return false
             if (function.origin != IrDeclarationOrigin.DEFINED) return true
             return (function as? IrSimpleFunction)?.correspondingPropertySymbol != null
+        }
+
+        /**
+         * Enclosing-symbol expansion (#30, ADR-0002 §3): whether the current
+         * site's **nearest enclosing member declaration** intersects the Mutation
+         * Scope. When any line of that declaration is a changed line, every
+         * mutation point in it is woven — a one-line edit can shift the whole
+         * declaration's behaviour.
+         *
+         * A site with no locatable enclosing declaration is out of scope: komust
+         * never mutates code it cannot place against a changed range.
+         */
+        private fun enclosingSymbolInScope(): Boolean {
+            val file = currentFile
+            val span = enclosingSymbolLineSpan(file) ?: return false
+            return scopeFilter.enclosesChange(filePath(file), span.first, span.second)
+        }
+
+        /**
+         * The 1-based, inclusive source-line span of the site's nearest enclosing
+         * **member declaration** — a member/top-level function, a property
+         * initializer (its backing field), or an `init` block (CONTEXT.md,
+         * "Enclosing symbol"). Local functions and lambdas are **transparent**:
+         * the walk steps over them so a site inside one is judged by its host
+         * member's span, not its own (ADR-0002 §3). A candidate whose offsets are
+         * undefined/synthetic is skipped too, so an outer locatable member still
+         * wins.
+         *
+         * `null` only when no locatable enclosing member declaration is found —
+         * the caller treats that as out of scope.
+         */
+        private fun enclosingSymbolLineSpan(file: IrFile): Pair<Int, Int>? {
+            val entry = file.fileEntry
+            for (scope in allScopes.asReversed()) {
+                val enclosing = when (val element = scope.irElement) {
+                    is IrFunction ->
+                        if (element.visibility == DescriptorVisibilities.LOCAL) null else element
+                    is IrField -> element
+                    is IrAnonymousInitializer -> element
+                    else -> null
+                } ?: continue
+                if (enclosing.startOffset < 0 || enclosing.endOffset < 0) continue
+                return (entry.getLineNumber(enclosing.startOffset) + 1) to
+                    (entry.getLineNumber(enclosing.endOffset) + 1)
+            }
+            return null
         }
 
         /** The counterpart operator function (`Int.plus` → `Int.minus`) with the same operand type. */
