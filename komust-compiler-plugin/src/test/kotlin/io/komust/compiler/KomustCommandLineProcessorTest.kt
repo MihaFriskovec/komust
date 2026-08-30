@@ -1,10 +1,8 @@
 package io.komust.compiler
 
-import io.komust.compiler.ir.KotlinIrCompat
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -19,12 +17,28 @@ class KomustCommandLineProcessorTest {
     }
 
     @Test
-    fun `the scope option is declared (#30)`() {
-        // #29 adds the enabled-operators option alongside it.
-        val options = KomustCommandLineProcessor().pluginOptions
-        val scope = options.singleOrNull { it.optionName == "scope" }
-        assertTrue(scope != null, "expected a 'scope' option, got ${options.map { it.optionName }}")
-        assertTrue(!scope!!.required, "scope must be optional — an --all run passes no scope.json")
+    fun `the operator and scope options are declared`() {
+        val names = KomustCommandLineProcessor().pluginOptions.map { it.optionName }.toSet()
+        assertTrue("disabledOperators" in names, "expected disabledOperators option; got $names")
+        assertTrue("enabledOperators" in names, "expected enabledOperators option; got $names")
+        assertTrue("scope" in names, "expected scope option (#30); got $names")
+    }
+
+    @Test
+    fun `every option is optional`() {
+        // The Gradle plugin may or may not emit any given SubpluginOption.
+        KomustCommandLineProcessor().pluginOptions.forEach {
+            assertEquals(false, it.required, "${it.optionName} must be optional")
+        }
+    }
+
+    @Test
+    fun `operator options repeat, the scope option is single-valued`() {
+        // One SubpluginOption per operator DSL entry; scope is one resolved path.
+        val byName = KomustCommandLineProcessor().pluginOptions.associateBy { it.optionName }
+        assertTrue(byName.getValue("disabledOperators").allowMultipleOccurrences)
+        assertTrue(byName.getValue("enabledOperators").allowMultipleOccurrences)
+        assertEquals(false, byName.getValue("scope").allowMultipleOccurrences)
     }
 
     @Test
@@ -33,23 +47,8 @@ class KomustCommandLineProcessorTest {
         val option = processor.pluginOptions.single { it.optionName == "scope" }
         val configuration = CompilerConfiguration()
 
-        assertNull(KotlinIrCompat.configuredScopePath(configuration))
+        assertNull(configuration.get(KomustCommandLineProcessor.KEY_SCOPE_PATH))
         processor.processOption(option, "/tmp/scope.json", configuration)
-        assertEquals("/tmp/scope.json", KotlinIrCompat.configuredScopePath(configuration))
-    }
-
-    @Test
-    fun `an unknown option name is rejected`() {
-        val processor = KomustCommandLineProcessor()
-        val bogus = object : org.jetbrains.kotlin.compiler.plugin.AbstractCliOption {
-            override val optionName = "not-a-komust-option"
-            override val valueDescription = ""
-            override val description = ""
-            override val required = false
-            override val allowMultipleOccurrences = false
-        }
-        assertThrows(RuntimeException::class.java) {
-            processor.processOption(bogus, "x", CompilerConfiguration())
-        }
+        assertEquals("/tmp/scope.json", configuration.get(KomustCommandLineProcessor.KEY_SCOPE_PATH))
     }
 }

@@ -90,6 +90,34 @@ mutate:
 - Not adopting equivalent-mutant *detection* means some equivalents will still
   slip through as false survivors; the skip-list is the only firewall in v1.
 
+## Spike-gated outcome (2026-08-30, #29)
+
+The full default catalog is now implemented in `komust-compiler-plugin`
+(K2 IR). All three spike-gated operators **landed** in the default tier — none
+demoted:
+
+- **Increments (`++ ↔ --`)** — express as an `inc`/`dec` `IrCall` swap, same
+  shape as the arithmetic operator.
+- **Empty/default-return** — `0` / `""` / `emptyList()` / `emptySet()` /
+  `emptyMap()`, keyed off the return value's IR type; types with no cheap
+  default are skipped.
+- **Per-call-site void-call removal** — any `Unit`-returning `IrCall` (not a
+  setter, not a skip-list assertion) is replaced by `Unit` under its own guard,
+  giving per-call fault localisation as intended (not whole-body-empty).
+
+Two implementation notes worth carrying forward:
+
+- The `0/0` guard (`%→/`, `*→/`) spills the divisor to a temporary; the woven
+  module now gets a `patchDeclarationParents()` pass so a later const-evaluation
+  lowering never trips over a still-parentless temporary.
+- `@SuppressMutations` at `@file:` scope is detected by scanning `annotations`
+  directly — `IrAnnotationContainer.hasAnnotation(FqName)` misses that case
+  under the pinned compiler.
+
+The enabled/disabled-operators option (`operators { enable / disable }`, #38)
+is wired through the `CommandLineProcessor` as `disabledOperators` /
+`enabledOperators` slug lists.
+
 ## Sources
 
 - pitest mutators: <https://pitest.org/quickstart/mutators/>

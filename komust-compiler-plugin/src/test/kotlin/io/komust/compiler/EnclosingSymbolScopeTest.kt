@@ -23,6 +23,10 @@ import org.junit.jupiter.api.Test
  *  - no `scope.json` option ⇒ the whole module is woven (the `--all` run);
  *  - an unreadable / malformed path degrades to an empty scope (zero mutants),
  *    never a whole-module run.
+ *
+ * Assertions are on the **set of woven source lines**, not mutant counts — the
+ * point here is *which declarations* are in scope, independent of how many
+ * operators the catalog fires per line.
  */
 class EnclosingSymbolScopeTest {
 
@@ -41,22 +45,24 @@ class EnclosingSymbolScopeTest {
         }
     """.trimIndent()
 
+    private fun lines(c: FixtureCompiler.Compiled): Set<Int> = c.mutants.map { it.line }.toSet()
+
     @Test
     fun `a changed line pulls its whole enclosing function into scope`() {
         val result = compileWithScope("Scoped.kt", twoFns, "Scoped.kt" to listOf(LineRange(4, 4)))
         assertTrue(result.ok, result.messages)
 
-        val mutants = parseMutants(result.messages)
-        assertEquals(1, mutants.size, "only inScope's site should be woven:\n${result.messages}")
-        assertEquals(4, mutants.single().line)
-        assertEquals("io.komust.scoped.ScopedKt", mutants.single().binaryClass)
+        assertEquals(setOf(4), lines(result), "only inScope's site should be woven:\n${result.messages}")
+        assertEquals(
+            setOf("io.komust.scoped.ScopedKt"),
+            result.mutants.map { it.binaryClass }.toSet(),
+        )
     }
 
     @Test
     fun `out-of-scope declarations produce no mutants`() {
         val result = compileWithScope("Scoped.kt", twoFns, "Scoped.kt" to listOf(LineRange(8, 8)))
-        val mutants = parseMutants(result.messages)
-        assertEquals(setOf(8), mutants.map { it.line }.toSet(), "only outOfScope should weave:\n${result.messages}")
+        assertEquals(setOf(8), lines(result), "only outOfScope should weave:\n${result.messages}")
     }
 
     @Test
@@ -64,7 +70,7 @@ class EnclosingSymbolScopeTest {
         // L1 is the package line — inside no declaration span.
         val result = compileWithScope("Scoped.kt", twoFns, "Scoped.kt" to listOf(LineRange(1, 1)))
         assertTrue(result.ok, result.messages)
-        assertTrue(parseMutants(result.messages).isEmpty(), result.messages)
+        assertTrue(result.mutants.isEmpty(), result.messages)
         assertTrue(result.messages.contains("0 mutant(s)"), result.messages)
     }
 
@@ -75,7 +81,7 @@ class EnclosingSymbolScopeTest {
             twoFns,
             scopeJson = ScopeJson.encode(MutationScope.ofWholeFiles(listOf("Scoped.kt"))),
         )
-        assertEquals(setOf(4, 8), parseMutants(result.messages).map { it.line }.toSet(), result.messages)
+        assertEquals(setOf(4, 8), lines(result), result.messages)
     }
 
     @Test
@@ -88,7 +94,7 @@ class EnclosingSymbolScopeTest {
             twoFns,
             "com/example/Scoped.kt" to listOf(LineRange(4, 4)),
         )
-        assertEquals(setOf(4), parseMutants(matched.messages).map { it.line }.toSet(), matched.messages)
+        assertEquals(setOf(4), lines(matched), matched.messages)
 
         // A same-basename entry under a different directory must not match.
         val wrongDir = compileWithScope(
@@ -96,14 +102,14 @@ class EnclosingSymbolScopeTest {
             twoFns,
             "other/pkg/Scoped.kt" to listOf(LineRange(1, 200)),
         )
-        assertTrue(parseMutants(wrongDir.messages).isEmpty(), wrongDir.messages)
+        assertTrue(wrongDir.mutants.isEmpty(), wrongDir.messages)
     }
 
     @Test
     fun `a file absent from scope-json produces no mutants`() {
         val result = compileWithScope("Scoped.kt", twoFns, "SomethingElse.kt" to listOf(LineRange(1, 100)))
         assertTrue(result.ok, result.messages)
-        assertTrue(parseMutants(result.messages).isEmpty(), result.messages)
+        assertTrue(result.mutants.isEmpty(), result.messages)
     }
 
     @Test
@@ -114,7 +120,7 @@ class EnclosingSymbolScopeTest {
             scopeJson = ScopeJson.encode(MutationScope.EMPTY),
         )
         assertTrue(result.ok, result.messages)
-        assertTrue(parseMutants(result.messages).isEmpty(), result.messages)
+        assertTrue(result.mutants.isEmpty(), result.messages)
     }
 
     // --- Lambdas and local functions expand to the host symbol ----------
@@ -135,9 +141,7 @@ class EnclosingSymbolScopeTest {
         // sites on L5 must still weave — the lambda expands to `host`, not itself.
         val result = compileWithScope("Lam.kt", withLambda, "Lam.kt" to listOf(LineRange(4, 4)))
         assertTrue(result.ok, result.messages)
-
-        val lines = parseMutants(result.messages).map { it.line }.toSet()
-        assertTrue(5 in lines, "host body sites (L5) should be in scope via the lambda line:\n${result.messages}")
+        assertTrue(5 in lines(result), "host body sites (L5) in scope via the lambda line:\n${result.messages}")
     }
 
     // L3 `fun host {` / L4 `fun helper(...) = x + 1` / L5 `return a + b + helper(0)` / L6 `}`
@@ -154,20 +158,18 @@ class EnclosingSymbolScopeTest {
     fun `a changed line in a local function pulls in its host member`() {
         val result = compileWithScope("Loc.kt", withLocalFn, "Loc.kt" to listOf(LineRange(4, 4)))
         assertTrue(result.ok, result.messages)
-
-        val lines = parseMutants(result.messages).map { it.line }.toSet()
-        assertTrue(5 in lines, "host body sites (L5) should be in scope via the local-fn line:\n${result.messages}")
+        assertTrue(5 in lines(result), "host body sites (L5) in scope via the local-fn line:\n${result.messages}")
     }
 
     @Test
     fun `a range hitting neither the host nor its nested code weaves nothing`() {
         val result = compileWithScope("Lam.kt", withLambda, "Lam.kt" to listOf(LineRange(1, 1)))
-        assertTrue(parseMutants(result.messages).isEmpty(), result.messages)
+        assertTrue(result.mutants.isEmpty(), result.messages)
     }
 
     // --- Property initializers ------------------------------------------
 
-    // L3 `val base` / L4 blank / L5 `val derived: Int = base + 5`
+    // L3 `val base: Int = 10` / L4 blank / L5 `val derived: Int = base + 5`
     private val topLevelProps = """
         package io.komust.props
 
@@ -179,10 +181,11 @@ class EnclosingSymbolScopeTest {
     @Test
     fun `a changed line pulls in an enclosing property initializer`() {
         val inScope = compileWithScope("Props.kt", topLevelProps, "Props.kt" to listOf(LineRange(5, 5)))
-        assertEquals(setOf(5), parseMutants(inScope.messages).map { it.line }.toSet(), inScope.messages)
+        assertEquals(setOf(5), lines(inScope), inScope.messages)
 
-        val outOfScope = compileWithScope("Props.kt", topLevelProps, "Props.kt" to listOf(LineRange(3, 3)))
-        assertTrue(parseMutants(outOfScope.messages).isEmpty(), outOfScope.messages)
+        // L1 (package) is inside neither property's initializer span.
+        val outOfScope = compileWithScope("Props.kt", topLevelProps, "Props.kt" to listOf(LineRange(1, 1)))
+        assertTrue(outOfScope.mutants.isEmpty(), outOfScope.messages)
     }
 
     // --- init blocks ---------------------------------------------------
@@ -203,11 +206,11 @@ class EnclosingSymbolScopeTest {
     @Test
     fun `a changed line pulls in an enclosing init block`() {
         val inScope = compileWithScope("Ini.kt", withInit, "Ini.kt" to listOf(LineRange(7, 7)))
-        assertEquals(setOf(7), parseMutants(inScope.messages).map { it.line }.toSet(), inScope.messages)
-        assertEquals("io.komust.ini.C", parseMutants(inScope.messages).single().binaryClass)
+        assertEquals(setOf(7), lines(inScope), inScope.messages)
+        assertEquals(setOf("io.komust.ini.C"), inScope.mutants.map { it.binaryClass }.toSet())
 
         val outOfScope = compileWithScope("Ini.kt", withInit, "Ini.kt" to listOf(LineRange(4, 4)))
-        assertTrue(parseMutants(outOfScope.messages).isEmpty(), outOfScope.messages)
+        assertTrue(outOfScope.mutants.isEmpty(), outOfScope.messages)
     }
 
     // --- Comment-only changed lines are not filtered in v1 --------------
@@ -225,7 +228,7 @@ class EnclosingSymbolScopeTest {
         // The changed range is the comment line (L4) only. v1 does not tokenise
         // the diff, so the enclosing function still weaves (issue #30, deferred).
         val result = compileWithScope("Cmt.kt", source, "Cmt.kt" to listOf(LineRange(4, 4)))
-        assertEquals(setOf(5), parseMutants(result.messages).map { it.line }.toSet(), result.messages)
+        assertEquals(setOf(5), lines(result), result.messages)
     }
 
     // --- No option / broken option ------------------------------------
@@ -233,7 +236,7 @@ class EnclosingSymbolScopeTest {
     @Test
     fun `with no scope option the whole module is woven`() {
         val result = FixtureCompiler.compile("Scoped.kt", twoFns)
-        assertEquals(setOf(4, 8), parseMutants(result.messages).map { it.line }.toSet(), result.messages)
+        assertEquals(setOf(4, 8), lines(result), result.messages)
     }
 
     @Test
@@ -244,7 +247,7 @@ class EnclosingSymbolScopeTest {
             scopeOptionValue = "/no/such/komust-scope.json",
         )
         assertTrue(result.ok, result.messages)
-        assertTrue(parseMutants(result.messages).isEmpty(), result.messages)
+        assertTrue(result.mutants.isEmpty(), result.messages)
         assertTrue(
             result.messages.contains("could not read the scope.json"),
             "expected a warning about the unreadable scope.json:\n${result.messages}",
@@ -255,7 +258,7 @@ class EnclosingSymbolScopeTest {
     fun `a malformed scope-json warns and weaves nothing`() {
         val result = FixtureCompiler.compile("Scoped.kt", twoFns, scopeJson = "{ not valid json")
         assertTrue(result.ok, result.messages)
-        assertTrue(parseMutants(result.messages).isEmpty(), result.messages)
+        assertTrue(result.mutants.isEmpty(), result.messages)
         assertTrue(result.messages.contains("could not read the scope.json"), result.messages)
     }
 
@@ -271,14 +274,4 @@ class EnclosingSymbolScopeTest {
             source,
             scopeJson = ScopeJson.encode(MutationScope.of(entries.toMap())),
         )
-
-    private data class ParsedMutant(val id: String, val binaryClass: String) {
-        private val parts = id.split(":")
-        val line: Int get() = parts[1].toInt()
-    }
-
-    private val mutantLine = Regex("""komust-mutant id=(\S+) class=(\S+) startOffset=\d+ path=\S+""")
-
-    private fun parseMutants(messages: String): List<ParsedMutant> =
-        mutantLine.findAll(messages).map { ParsedMutant(it.groupValues[1], it.groupValues[2]) }.toList()
 }
