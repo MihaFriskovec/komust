@@ -12,13 +12,14 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
  * `kotlinCompilerPluginClasspath` in a real build, or `kotlin-compile-testing`
  * in this module's tests.
  *
- * It registers the [KomustIrGenerationExtension] and nothing else. As of #28
- * that extension weaves the first operator — the arithmetic additive swap — into
- * the module with the compile-once model.
+ * It resolves the [OperatorConfig] from the plugin options the
+ * [KomustCommandLineProcessor] parsed, then registers the
+ * [KomustIrGenerationExtension] that weaves the default operator catalog
+ * (ADR-0001) with the compile-once model.
  *
- * Per the compat-shim seam rule, this class imports only the SPI type it
- * subclasses and its override signature; message and registration plumbing go
- * through [KotlinIrCompat].
+ * Per the compat-shim seam rule, this class imports only the SPI types it
+ * subclasses and its override signature; message plumbing, extension
+ * registration and IR work go through [KotlinIrCompat].
  */
 public class KomustCompilerPluginRegistrar : CompilerPluginRegistrar() {
 
@@ -26,6 +27,13 @@ public class KomustCompilerPluginRegistrar : CompilerPluginRegistrar() {
 
     override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
         val diagnostics = KotlinIrCompat.pluginDiagnostics(configuration)
-        KotlinIrCompat.registerIrExtension(this, KomustIrGenerationExtension(diagnostics))
+        val config = OperatorConfig.resolve(
+            disabledSlugs = configuration.get(KomustCommandLineProcessor.KEY_DISABLED_OPERATORS).orEmpty(),
+            enabledSlugs = configuration.get(KomustCommandLineProcessor.KEY_ENABLED_OPERATORS).orEmpty(),
+            onUnknownSlug = { slug ->
+                diagnostics.warn("komust: unknown operator slug '$slug' in the enabled/disabled-operators option — ignoring.")
+            },
+        )
+        KotlinIrCompat.registerIrExtension(this, KomustIrGenerationExtension(diagnostics, config))
     }
 }
