@@ -2,7 +2,6 @@ package io.komust.engine.sweep
 
 import io.komust.engine.coverage.CoveragePassResult
 import io.komust.engine.coverage.TestId
-import kotlin.time.Duration
 
 /**
  * The **sequential mutant sweep** core (ADR-0003, single in-process worker).
@@ -43,12 +42,8 @@ public class MutantSweep(
         SweepResult(mutants.map(::score))
 
     private fun score(mutant: Mutant): MutantResult {
-        val covering = coveragePass.index.testsCovering(mutant.coverageKey)
-        if (covering.isEmpty()) return MutantResult.noCoverage(mutant)
-
-        val ordered = covering.sortedWith(
-            compareBy({ coveragePass.timing(it) ?: Duration.INFINITE }, TestId::uniqueId),
-        )
+        val ordered = CoveringTestSelection.select(coveragePass, mutant)
+        if (ordered.isEmpty()) return MutantResult.noCoverage(mutant)
 
         switch.activate(mutant.id)
         try {

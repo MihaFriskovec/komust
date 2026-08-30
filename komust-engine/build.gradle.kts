@@ -1,8 +1,14 @@
 plugins {
     id("komust.kotlin-module")
+    // The controller <-> worker-JVM wire protocol (#34) is line-framed JSON.
+    kotlin("plugin.serialization")
 }
 
 dependencies {
+    // Worker-pool IPC (#34): WorkItem / WorkerMessage are (de)serialised as
+    // one JSON object per line over the worker process's stdin/stdout.
+    implementation(libs.kotlinx.serialization.json)
+
     // The engine drives tests through the JUnit Platform Launcher API directly
     // (ADR-0005 §4) — the launcher is a main dependency here, not just a test one.
     implementation(platform(libs.junit.bom))
