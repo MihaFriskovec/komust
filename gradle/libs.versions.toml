@@ -17,6 +17,10 @@ junit = "6.1.3"
 # older releases mis-handle Kotlin inline-function line tables.
 jacoco = "0.8.15"
 kotlinxSerialization = "1.9.0"
+# kotlin-compile-testing (Zac Sweers' K2-tracking fork). Drives an in-process K2
+# compile of fixture sources in `komust-compiler-plugin`'s tests, against the
+# exact pinned Kotlin above (it resolves the compiler off the test classpath).
+kctfork = "0.8.0"
 
 [libraries]
 # Provided by the Kotlin compiler at plugin-load time; never shipped.
@@ -33,6 +37,8 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
