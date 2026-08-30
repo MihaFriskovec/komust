@@ -23,6 +23,11 @@ kotlinxSerialization = "1.9.0"
 kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlin" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlin-gradle-plugin-api = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin-api", version.ref = "kotlin" }
+# The kotlinx.serialization Kotlin compiler plugin, applied by modules that
+# (de)serialise JSON (komust-scope's scope.json; later komust-engine's output).
+# Pulled onto the buildSrc classpath so a module applies `kotlin("plugin.serialization")`
+# without re-declaring a version.
+kotlin-serialization-plugin = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
