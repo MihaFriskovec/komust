@@ -53,10 +53,12 @@ Golden-file assertions on `scope.json` are appropriate (Testing Decisions, #23).
 - Changeset: working-tree diff against that base — **staged + unstaged +
   untracked** all count.
 - New and untracked files enter as `wholeFile`. Deleted files drop out.
-  Rename detection is **off** (`--no-renames`): a renamed file is a delete
-  (dropped) plus an add (`wholeFile`), and output does not depend on the user's
-  `diff.renames` config. Rename-*follow* (keeping only the changed lines at the
-  new path) is #26.
+- Rename detection is **on** (`--find-renames`, passed explicitly so output does
+  not depend on the user's `diff.renames` config). A renamed file is **followed**
+  to its new path and carries only its changed line ranges — a renamed-then-
+  edited file is not re-mutated whole. A pure rename (no content change)
+  contributes nothing. A rename git cannot pair up (content rewritten past the
+  similarity threshold) degrades safely to a drop + a `wholeFile` add.
 - Unrelated histories (no merge-base between `HEAD` and the default branch) are
   a hard error, not a silent whole-branch diff.
 - Filter: production Kotlin only — `.kt` files outside test source sets and
@@ -64,5 +66,14 @@ Golden-file assertions on `scope.json` are appropriate (Testing Decisions, #23).
   (`.kts` build scripts are excluded.)
 - Empty changeset ⇒ `{ "version": 1, "files": [] }`, exit success, zero mutants.
 
-Explicit overrides (`--files`, `--scope`, `--since`) and git rename/deletion
-edge-case handling are specified in #26.
+## Explicit overrides
+
+An explicit override **fully replaces** git — the git changeset is never
+consulted when one is present (ADR-0002). All three still normalise to the same
+`scope.json` shape above.
+
+| Producer            | Effect                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--files <globs>`   | Whole-file sugar. Every production Kotlin source under the repo that a pattern matches enters as `wholeFile`. Patterns match repo-root-relative `/`-separated paths and support `*` (within a segment), `**` (across segments) and `?`; a pattern with no `/` also matches by basename anywhere. The candidate list is a work-tree walk (`build` / `out` / `target` / `.gradle` / `generated` and dot-directories are not descended); git is not run. A pattern that matches nothing is a hard error. |
+| `--scope <file>`    | Precise line ranges read straight from an existing `scope.json`. Ranges pass through unchanged apart from re-normalisation (sorted, merged, path-sorted). A missing or malformed file is a hard error. |
+| `--since <ref>`     | Not a replacement for git — it swaps the ref the base merge-base is taken with. `--since HEAD` collapses to "working-tree changes only"; `--since <branch>` compares against that branch's divergence point. An unknown ref, or one with no common ancestor with `HEAD`, is a hard error. |

@@ -42,4 +42,13 @@ class ProductionKotlinFilterTest {
     fun `does not mistake a non-test source set with test in the name`() {
         assertTrue(filter.accepts("src/latest/kotlin/Foo.kt"))
     }
+
+    @Test
+    fun `prunesDirectory skips build output and dot-directories`() {
+        assertTrue(filter.prunesDirectory("build"))
+        assertTrue(filter.prunesDirectory(".git"))
+        assertTrue(filter.prunesDirectory(".idea"))
+        assertFalse(filter.prunesDirectory("src"))
+        assertFalse(filter.prunesDirectory("main"))
+    }
 }
