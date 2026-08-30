@@ -85,6 +85,7 @@ public object ReportBuilder {
             SweepStatus.KILLED -> MutantStatus.KILLED
             SweepStatus.SURVIVED -> MutantStatus.SURVIVED
             SweepStatus.NO_COVERAGE -> MutantStatus.NO_COVERAGE
+            SweepStatus.TIMEOUT -> MutantStatus.TIMEOUT
         }
         return MutantEntry(
             id = descriptor.id,

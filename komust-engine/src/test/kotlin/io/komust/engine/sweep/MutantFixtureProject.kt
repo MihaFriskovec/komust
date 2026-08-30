@@ -37,6 +37,24 @@ class MutantFixtureProject private constructor(
 ) {
     fun coverageInput() = CoveragePassInput(listOf(prodDir), listOf(testDir))
 
+    /**
+     * Code-under-test + test-class output dirs — what a forked worker reloads in
+     * a fresh loader per mutant ([io.komust.engine.sweep.forked.worker.MutantClassLoader]).
+     */
+    val reloadableRoots: List<Path> get() = listOf(prodDir, testDir)
+
+    /**
+     * A full class path for a forked worker JVM: the reloadable roots plus this
+     * test JVM's own class path (JUnit Platform + Jupiter engine, the
+     * `io.komust.runtime` switch, the engine, kotlinx-serialization, the Kotlin
+     * stdlib — everything `WorkerMain` needs).
+     */
+    val workerClasspath: List<Path>
+        get() = (reloadableRoots + System.getProperty("java.class.path")
+            .split(File.pathSeparatorChar)
+            .filter { it.isNotBlank() }
+            .map { Path.of(it) }).distinct()
+
     /** Line number (1-based) of the first source line containing [needle]. */
     fun lineOf(fileName: String, needle: String): Int {
         val text = sources.first { it.first == fileName }.second
@@ -48,7 +66,9 @@ class MutantFixtureProject private constructor(
     /** Every woven mutant whose site is [needle]'s line in [fileName]. */
     fun mutantsOn(fileName: String, needle: String): List<Mutant> {
         val line = lineOf(fileName, needle)
-        return mutants.filter { it.line == line }
+        // The mutant id is `<file>:<line>:<col>:<token>#<ord>` — match the file too
+        // so a multi-file fixture does not cross-match on a shared line number.
+        return mutants.filter { it.line == line && it.id.substringBefore(':') == fileName }
     }
 
     companion object {

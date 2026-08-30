@@ -1,19 +1,21 @@
 plugins {
     id("komust.kotlin-module")
-    // The agent output contract (#5) — report.json / survivors.json — is
-    // (de)serialised with kotlinx.serialization; version comes from the build
+    // kotlinx.serialization: the agent output contract (#5/#35) report.json /
+    // survivors.json models are @Serializable, and the controller <-> worker-JVM
+    // wire protocol (#34) is line-framed JSON. Version comes from the build
     // classpath (buildSrc pins it to the catalog Kotlin version).
     kotlin("plugin.serialization")
 }
 
 dependencies {
+    // report.json / survivors.json models are @Serializable (#5, #35); the
+    // worker-pool IPC (#34) sends one JSON WorkItem / WorkerMessage per line.
+    implementation(libs.kotlinx.serialization.json)
+
     // The engine drives tests through the JUnit Platform Launcher API directly
     // (ADR-0005 §4) — the launcher is a main dependency here, not just a test one.
     implementation(platform(libs.junit.bom))
     implementation(libs.junit.platform.launcher)
-
-    // report.json / survivors.json models are @Serializable (#5, #35).
-    implementation(libs.kotlinx.serialization.json)
 
     // Coverage pass (ADR-0004): the runtime agent's control API drives per-test
     // dump/reset in-process; the core API turns each `.exec` snapshot into

@@ -32,6 +32,23 @@ public fun interface CoveringTestRunner {
 }
 
 /**
+ * One covering test's outcome plus the throwables behind a [TestVerdict.FAILED],
+ * so a caller can tell a plain assertion failure from a `VirtualMachineError`
+ * (OOM / `StackOverflowError`) that JUnit caught and reported as a test failure.
+ * The forked worker ([io.komust.engine.sweep.forked.worker.WorkerMain]) needs
+ * that distinction to recycle a worker whose heap is now suspect (ADR-0003
+ * §Outcome taxonomy).
+ */
+public data class CoveringTestOutcome(val verdict: TestVerdict, val failures: List<Throwable>) {
+
+    /** True when a failure (or one of its causes) is a JVM memory error. */
+    public val isMemoryError: Boolean
+        get() = failures.any { failure ->
+            generateSequence<Throwable>(failure) { it.cause }.any { it is VirtualMachineError }
+        }
+}
+
+/**
  * A covering test the coverage index recorded no longer resolves to anything on
  * the test classpath — the suite changed since the coverage pass, or the roots
  * are wrong.
@@ -78,7 +95,14 @@ public class JUnitPlatformCoveringTestRunner(
     private val launcherFactory: () -> Launcher = { LauncherFactory.create() },
 ) : CoveringTestRunner {
 
-    override fun run(test: TestId): TestVerdict {
+    override fun run(test: TestId): TestVerdict = runReportingFailures(test).verdict
+
+    /**
+     * Like [run], but also surfaces the throwables behind a
+     * [TestVerdict.FAILED] — the forked worker uses [CoveringTestOutcome.isMemoryError]
+     * to decide whether it must recycle itself.
+     */
+    public fun runReportingFailures(test: TestId): CoveringTestOutcome {
         val request = LauncherDiscoveryRequestBuilder.request()
             .selectors(selectUniqueId(test.uniqueId))
             // The covering-test run mirrors the coverage pass: sequential, no
@@ -95,11 +119,14 @@ public class JUnitPlatformCoveringTestRunner(
         // stance on an empty test set).
         if (stats.testsFoundCount == 0L) throw UnresolvableCoveringTestException(test)
 
+        val failures = stats.failures.mapNotNull { it.exception }
         // A failed container (a throwing @BeforeEach/@BeforeAll) means the
         // covering test could not complete under the mutant — detected
         // divergence, scored as a kill (ADR-0003 outcome taxonomy).
-        if (stats.containersFailedCount > 0L) return TestVerdict.FAILED
-
-        return if (stats.totalFailureCount == 0L) TestVerdict.PASSED else TestVerdict.FAILED
+        val failed = stats.containersFailedCount > 0L || stats.totalFailureCount > 0L
+        return CoveringTestOutcome(
+            verdict = if (failed) TestVerdict.FAILED else TestVerdict.PASSED,
+            failures = failures,
+        )
     }
 }
