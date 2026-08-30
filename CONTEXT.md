@@ -75,6 +75,9 @@ A caller-supplied pinning of the test set, at **global** granularity (one set fo
 ### Compiler plugin
 The **K2 IR** artifact (`komust-compiler-plugin`) that weaves mutants into a Kotlin compilation and injects the runtime guard (#2). It is the **mutation surface** — the only component that understands Kotlin IR — and is loaded into a Kotlin compile as a Kotlin compiler plugin. It knows nothing about test running, coverage, or the build tool.
 
+### Compat-shim seam
+The **single file** in `komust-compiler-plugin` (`io.komust.compiler.ir.KotlinIrCompat`) through which *all* Kotlin-version-specific K2 compiler/IR API is touched — the standing mitigation for that API being officially unstable (`@ExperimentalCompilerApi`, `@UnsafeDuringIrConstructionAPI`, and IR construction churning every Kotlin release). Paired with the **exact Kotlin version pin** in the version catalog: a Kotlin bump is a deliberate, reviewed change whose blast radius is one file. No `org.jetbrains.kotlin.*` import is allowed elsewhere in the module; code needing the compiler API adds a narrow, intent-named helper to the seam instead. See ADR-0005.
+
 ### Core engine
 The build-tool-agnostic orchestrator (`komust-engine`) that, given the **engine input contract**, runs the coverage pass (ADR-0004), the mutant sweep (ADR-0003), and emits the JSON output (agent contract, #5). It is the reusable heart of komust: the Gradle plugin and the deferred CLI both drive the *same* engine. It never touches Gradle APIs, and it drives test execution through the **JUnit Platform Launcher API** directly (not any build tool's test runner). See ADR-0005.
 
