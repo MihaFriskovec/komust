@@ -15,8 +15,18 @@ class KomustCommandLineProcessorTest {
     }
 
     @Test
-    fun `no options are declared yet`() {
-        // #30 (scope.json path) and #29 (enabled operators) add the first ones.
-        assertTrue(KomustCommandLineProcessor().pluginOptions.isEmpty())
+    fun `the enabled and disabled operator options are declared`() {
+        val names = KomustCommandLineProcessor().pluginOptions.map { it.optionName }.toSet()
+        assertTrue("disabledOperators" in names, "expected disabledOperators option; got $names")
+        assertTrue("enabledOperators" in names, "expected enabledOperators option; got $names")
+    }
+
+    @Test
+    fun `all options are optional and repeatable`() {
+        // The Gradle plugin may emit one SubpluginOption per DSL entry.
+        KomustCommandLineProcessor().pluginOptions.forEach {
+            assertEquals(false, it.required, "${it.optionName} must be optional")
+            assertTrue(it.allowMultipleOccurrences, "${it.optionName} must allow multiple occurrences")
+        }
     }
 }

@@ -40,7 +40,10 @@ A mutant whose behaviour is indistinguishable from the original program, so **no
 The documented policy of constructs komust deliberately does **not** mutate because doing so reliably produces junk or equivalent mutants (e.g. `!!`, `TODO()`, `require`/`check`, exhaustive `when` without `else`, and the null-checks that `?:`/`?.` desugar into). The skip-list is komust's equivalent-mutant firewall. See ADR-0001.
 
 ### Spike-gated (operator)
-An operator whose inclusion is decided but whose clean expression in K2 IR is not yet proven by the IR prototype (#2). If the prototype finds it awkward, it is demoted to **experimental** or the skip-list rather than reopening the catalog decision.
+An operator whose inclusion is decided but whose clean expression in K2 IR is not yet proven by the IR prototype (#2). If the prototype finds it awkward, it is demoted to **experimental** or the skip-list rather than reopening the catalog decision. **Resolved (#29):** all three spike-gated operators — increments (`++↔--`), empty/default-return, per-call-site void-call removal — landed in the default tier; none demoted. See the addendum in ADR-0001.
+
+### Suppression hatch
+The user-facing escape valve for sites the built-in **skip-list** does not cover (#36): the `@SuppressMutations` annotation (`io.komust.runtime`, applied to a declaration or `@file:`) suppresses every mutation site inside it; the `// komust:ignore` comment does the same at single-line granularity (the marked line and the line below it). Distinct from the skip-list, which is fixed policy komust applies unprompted.
 
 ### Protected (construct)
 A Kotlin construct that komust intentionally leaves untouched — it is on the skip-list. Distinct from "not yet supported": protection is a deliberate correctness choice. `?.`, `!!`, and desugared null-checks are protected.
