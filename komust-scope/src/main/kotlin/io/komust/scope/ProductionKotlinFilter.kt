@@ -18,7 +18,12 @@ package io.komust.scope
  *  - generated / build output directories: any path segment in [excludedDirs]
  */
 class ProductionKotlinFilter(
-    private val excludedDirs: Set<String> = DEFAULT_EXCLUDED_DIRS,
+    /**
+     * Path segments that mark generated / build output. Also used to prune the
+     * work-tree walk that backs the `--files` override, so a large `build/`
+     * tree is never descended.
+     */
+    val excludedDirs: Set<String> = DEFAULT_EXCLUDED_DIRS,
 ) {
 
     fun accepts(path: String): Boolean {

@@ -77,6 +77,9 @@ class GitFixture private constructor(val root: Path) {
     fun resolveScope(config: ScopeConfig = ScopeConfig()): MutationScope =
         ScopeResolver(config).resolveFromGit(root)
 
+    fun resolveScope(spec: ScopeSpec, config: ScopeConfig = ScopeConfig()): MutationScope =
+        ScopeResolver(config).resolve(root, spec)
+
     companion object {
         /** A repo with one commit on `main` containing [initialFiles]. */
         fun create(initialFiles: Map<String, String> = emptyMap()): GitFixture {

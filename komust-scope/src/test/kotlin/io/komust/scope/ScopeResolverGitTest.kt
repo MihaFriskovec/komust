@@ -216,6 +216,110 @@ class ScopeResolverGitTest {
     }
 
     @Test
+    fun `--since HEAD narrows scope to working-tree changes only`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        fixture.checkoutNewBranch("feature")
+        fixture.write(fooKt, original.replace("fun a(): Int = 1", "fun a(): Int = 11"))
+        fixture.add(fooKt).commit("committed edit on feature")
+        fixture.write(
+            fooKt,
+            original
+                .replace("fun a(): Int = 1", "fun a(): Int = 11")
+                .replace("fun c(): Int = 3", "fun c(): Int = 33"),
+        )
+
+        // default: committed + working-tree changes, both vs the merge-base
+        assertEquals(
+            listOf(LineRange(4, 4), LineRange(6, 6)),
+            fixture.resolveScope(ScopeSpec.Git()).ranges(fooKt),
+        )
+        // --since HEAD: merge-base(HEAD, HEAD) is HEAD, so only the uncommitted edit
+        assertEquals(
+            listOf(LineRange(6, 6)),
+            fixture.resolveScope(ScopeSpec.Git(since = "HEAD")).ranges(fooKt),
+        )
+    }
+
+    @Test
+    fun `--since compares against a caller-supplied ref`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        fixture.write(fooKt, original.replace("fun a(): Int = 1", "fun a(): Int = 11"))
+        fixture.add(fooKt).commit("c1")
+        fixture.write(
+            fooKt,
+            original
+                .replace("fun a(): Int = 1", "fun a(): Int = 11")
+                .replace("fun c(): Int = 3", "fun c(): Int = 33"),
+        )
+        fixture.add(fooKt).commit("c2")
+
+        val scope = fixture.resolveScope(ScopeSpec.Git(since = "HEAD~1"))
+
+        // only c2's change; c1 is behind the --since ref
+        assertEquals(listOf(LineRange(6, 6)), scope.ranges(fooKt))
+    }
+
+    @Test
+    fun `--since with an unknown ref fails clearly`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+
+        val ex = assertThrows<ScopeResolutionException> {
+            fixture.resolveScope(ScopeSpec.Git(since = "no-such-ref"))
+        }
+        assertTrue(ex.message!!.contains("does not resolve"))
+    }
+
+    @Test
+    fun `a renamed and edited file follows to its new path with only the changed lines`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        fixture.checkoutNewBranch("feature")
+        val movedKt = "src/main/kotlin/com/example/Renamed.kt"
+        fixture.git("mv", fooKt, movedKt)
+        fixture.write(movedKt, original.replace("fun b(): Int = 2", "fun b(): Int = 22"))
+        fixture.add().commit("rename and edit")
+
+        val scope = fixture.resolveScope()
+
+        assertEquals(listOf(movedKt), scope.files.map { it.path })
+        assertEquals(listOf(LineRange(5, 5)), scope.ranges(movedKt))
+    }
+
+    @Test
+    fun `a pure rename contributes nothing`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        fixture.checkoutNewBranch("feature")
+        fixture.git("mv", fooKt, "src/main/kotlin/com/example/Renamed.kt")
+        fixture.add().commit("rename only")
+
+        assertTrue(fixture.resolveScope().isEmpty)
+    }
+
+    @Test
+    fun `a renamed file whose content is rewritten past the rename threshold enters whole`() {
+        val fixture = GitFixture.create(mapOf(fooKt to original))
+        fixture.checkoutNewBranch("feature")
+        val movedKt = "src/main/kotlin/com/example/Rewritten.kt"
+        fixture.git("mv", fooKt, movedKt)
+        // completely different content — git will not pair this as a rename
+        fixture.write(
+            movedKt,
+            buildString {
+                appendLine("package com.example")
+                appendLine("")
+                appendLine("class Rewritten {")
+                appendLine("    fun onlyThis(): String = \"nothing like the original\"")
+                appendLine("}")
+            },
+        )
+        fixture.add().commit("rename then rewrite")
+
+        val scope = fixture.resolveScope()
+
+        assertEquals(listOf(movedKt), scope.files.map { it.path })
+        assertTrue(scope.files.single().isWholeFile)
+    }
+
+    @Test
     fun `writes scope json for the resolved scope`() {
         val fixture = GitFixture.create(mapOf(fooKt to original))
         fixture.checkoutNewBranch("feature")
