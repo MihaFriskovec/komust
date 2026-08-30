@@ -32,6 +32,20 @@ public fun interface CoveringTestRunner {
 }
 
 /**
+ * A covering test the coverage index recorded no longer resolves to anything on
+ * the test classpath — the suite changed since the coverage pass, or the roots
+ * are wrong.
+ *
+ * Terminal, like the coverage package's [io.komust.engine.coverage.EmptyTestSuiteException]:
+ * scoring the mutant `KILLED` off a test that never ran would inflate the
+ * mutation score and hide a real gap, so the sweep fails loudly instead.
+ */
+public class UnresolvableCoveringTestException(public val test: TestId) : RuntimeException(
+    "covering test '$test' from the coverage index resolved to no runnable test — " +
+        "the test suite changed since the coverage pass, or the test classpath roots are wrong",
+)
+
+/**
  * The production [CoveringTestRunner]: re-selects one test by its
  * `TestIdentifier.getUniqueId()` (the [TestId] the coverage index stored) and
  * runs it through the **JUnit Platform Launcher API** directly (ADR-0005 §4).
@@ -62,10 +76,15 @@ public class JUnitPlatformCoveringTestRunner(
         launcherFactory().execute(request, summary)
         val stats = summary.summary
 
-        // A selector that resolved to nothing, or a container that blew up in
-        // discovery/setup, is not a pass — treat it as a kill so a broken
-        // selection is visible rather than silently scoring SURVIVED.
-        if (stats.testsFoundCount == 0L || stats.containersFailedCount > 0L) return TestVerdict.FAILED
+        // A selector that resolved to nothing is a wiring/suite-drift bug, not a
+        // survivor and not a kill — fail loudly (matches the coverage package's
+        // stance on an empty test set).
+        if (stats.testsFoundCount == 0L) throw UnresolvableCoveringTestException(test)
+
+        // A failed container (a throwing @BeforeEach/@BeforeAll) means the
+        // covering test could not complete under the mutant — detected
+        // divergence, scored as a kill (ADR-0003 outcome taxonomy).
+        if (stats.containersFailedCount > 0L) return TestVerdict.FAILED
 
         return if (stats.totalFailureCount == 0L) TestVerdict.PASSED else TestVerdict.FAILED
     }

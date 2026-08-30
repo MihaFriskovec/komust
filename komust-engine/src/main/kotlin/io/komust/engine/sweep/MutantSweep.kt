@@ -1,6 +1,7 @@
 package io.komust.engine.sweep
 
 import io.komust.engine.coverage.CoveragePassResult
+import io.komust.engine.coverage.TestId
 import kotlin.time.Duration
 
 /**
@@ -13,7 +14,8 @@ import kotlin.time.Duration
  *     [MutantStatus.NO_COVERAGE] — the mutant is never run and never counts as a
  *     survivor (ADR-0004 §4).
  *  2. **Order** the covering tests **fastest-first** using the coverage pass's
- *     per-test timing (a test with no recorded time sorts last).
+ *     per-test timing, with the test id as a tie-break so the order is fully
+ *     deterministic (a test with no recorded time sorts last).
  *  3. **Switch the mutant on** ([MutantSwitchHandle]), run its covering tests
  *     one at a time **fail-fast**, and switch back to the green baseline. The
  *     first covering test that fails ends the mutant as [MutantStatus.KILLED];
@@ -41,12 +43,12 @@ public class MutantSweep(
         SweepResult(mutants.map(::score))
 
     private fun score(mutant: Mutant): MutantResult {
-        val covering = coveragePass.index.testsCovering(mutant.binaryClassName, mutant.line)
-        if (covering.isEmpty()) {
-            return MutantResult(mutant, MutantStatus.NO_COVERAGE, emptyList(), killedBy = null, testsExecuted = 0)
-        }
+        val covering = coveragePass.index.testsCovering(mutant.coverageKey)
+        if (covering.isEmpty()) return MutantResult.noCoverage(mutant)
 
-        val ordered = covering.sortedBy { coveragePass.timing(it) ?: Duration.INFINITE }
+        val ordered = covering.sortedWith(
+            compareBy({ coveragePass.timing(it) ?: Duration.INFINITE }, TestId::uniqueId),
+        )
 
         switch.activate(mutant.id)
         try {
@@ -54,10 +56,10 @@ public class MutantSweep(
             for (test in ordered) {
                 executed++
                 if (testRunner.run(test) == TestVerdict.FAILED) {
-                    return MutantResult(mutant, MutantStatus.KILLED, ordered, killedBy = test, testsExecuted = executed)
+                    return MutantResult.killed(mutant, ordered, killedBy = test, testsExecuted = executed)
                 }
             }
-            return MutantResult(mutant, MutantStatus.SURVIVED, ordered, killedBy = null, testsExecuted = executed)
+            return MutantResult.survived(mutant, ordered)
         } finally {
             switch.clear()
         }

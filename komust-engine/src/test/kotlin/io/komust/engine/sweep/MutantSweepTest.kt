@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -152,5 +153,36 @@ class MutantSweepTest {
             .sweep(listOf(untestedMutant))
         assertEquals(0, result.survived)
         assertSame(MutantStatus.NO_COVERAGE, result.results.single().status)
+    }
+
+    @Test
+    fun `covering tests with equal timing get a stable tie-break by test id`() {
+        // fastA and fastB both have the same recorded time — id order decides.
+        val fastA = TestId("[engine:junit-jupiter]/[class:CalcTest]/[method:aaa()]")
+        val fastB = TestId("[engine:junit-jupiter]/[class:CalcTest]/[method:bbb()]")
+        val index = CoverageIndexBuilder().apply {
+            add("fixture.Calc", 4, fastB) // inserted first, deliberately out of id order
+            add("fixture.Calc", 4, fastA)
+        }.build()
+        val pass = CoveragePassResult(
+            index,
+            listOf(exec(fastA, 5.milliseconds), exec(fastB, 5.milliseconds)),
+        )
+        val runner = RecordingRunner()
+
+        MutantSweep(pass, runner, RecordingSwitch()).sweep(listOf(addMutant))
+
+        assertEquals(listOf(fastA, fastB), runner.calls)
+    }
+
+    @Test
+    fun `a runner error (unresolvable covering test) propagates and still clears the switch`() {
+        val switch = RecordingSwitch()
+        val throwing = CoveringTestRunner { throw UnresolvableCoveringTestException(fast) }
+
+        assertThrows<UnresolvableCoveringTestException> {
+            MutantSweep(coveragePass(), throwing, switch).sweep(listOf(addMutant))
+        }
+        assertEquals(listOf(addMutant.id, null), switch.activations)
     }
 }

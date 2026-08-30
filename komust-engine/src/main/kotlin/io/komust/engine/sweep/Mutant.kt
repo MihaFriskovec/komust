@@ -11,10 +11,11 @@ import io.komust.engine.coverage.CoverageKey
  *    `if (mutantActive("<id>")) <mutant> else <original>`. The sweep hands this
  *    verbatim to `io.komust.runtime.MutantRegistry.activate(id)` (via
  *    [MutantSwitchHandle]) to switch exactly this mutant on.
- *  - [binaryClassName] + [line] — the `(binary class name, source line)` pair
- *    the enclosing declaration and mutated site resolve to, the direct
+ *  - [coverageKey] — the `(binary class name, source line)` pair the enclosing
+ *    declaration and mutated site resolve to; the direct
  *    [io.komust.engine.coverage.CoverageIndex] lookup key (ADR-0004 §2),
- *    strictly more precise than a file-level union.
+ *    strictly more precise than a file-level union. `CoverageKey`'s own
+ *    invariant (`line >= 1`) guards construction.
  *
  * This is the sweep's slice of the engine input contract (ADR-0005). How the
  * mutant list is produced — a mutation manifest emitted by the compiler plugin,
@@ -22,9 +23,11 @@ import io.komust.engine.coverage.CoverageKey
  */
 public data class Mutant(
     val id: String,
-    val binaryClassName: String,
-    val line: Int,
+    val coverageKey: CoverageKey,
 ) {
-    /** The coverage-index lookup key for this mutant's site. */
-    val coverageKey: CoverageKey get() = CoverageKey(binaryClassName, line)
+    public constructor(id: String, binaryClassName: String, line: Int) :
+        this(id, CoverageKey(binaryClassName, line))
+
+    val binaryClassName: String get() = coverageKey.binaryClassName
+    val line: Int get() = coverageKey.line
 }

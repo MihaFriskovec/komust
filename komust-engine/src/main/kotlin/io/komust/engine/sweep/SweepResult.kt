@@ -31,9 +31,11 @@ public enum class MutantStatus {
  *
  * @property mutant the mutant this scores.
  * @property status the outcome.
- * @property coveringTests the mutant's covering test set, already ordered
- *   **fastest-first** (ADR-0003) — the order the sweep ran them in. Empty when
- *   [status] is [MutantStatus.NO_COVERAGE].
+ * @property coveringTests the mutant's covering test set, ordered
+ *   **fastest-first** (ADR-0003) — the order the sweep visits them in. This is
+ *   the whole selected set; on a fail-fast [MutantStatus.KILLED] only the first
+ *   [testsExecuted] of them actually ran. Empty when [status] is
+ *   [MutantStatus.NO_COVERAGE].
  * @property killedBy the first covering test that failed, when [status] is
  *   [MutantStatus.KILLED]; `null` otherwise. Because the sweep is **fail-fast**,
  *   this is the *only* test known to kill the mutant — later covering tests were
@@ -48,7 +50,18 @@ public data class MutantResult(
     val coveringTests: List<TestId>,
     val killedBy: TestId?,
     val testsExecuted: Int,
-)
+) {
+    internal companion object {
+        fun noCoverage(mutant: Mutant) =
+            MutantResult(mutant, MutantStatus.NO_COVERAGE, emptyList(), killedBy = null, testsExecuted = 0)
+
+        fun killed(mutant: Mutant, coveringTests: List<TestId>, killedBy: TestId, testsExecuted: Int) =
+            MutantResult(mutant, MutantStatus.KILLED, coveringTests, killedBy, testsExecuted)
+
+        fun survived(mutant: Mutant, coveringTests: List<TestId>) =
+            MutantResult(mutant, MutantStatus.SURVIVED, coveringTests, killedBy = null, testsExecuted = coveringTests.size)
+    }
+}
 
 /**
  * The outcome of one sequential sweep over a mutant list: every mutant's
@@ -56,13 +69,15 @@ public data class MutantResult(
  */
 public class SweepResult(public val results: List<MutantResult>) {
 
+    private val byMutantId: Map<String, MutantResult> = results.associateBy { it.mutant.id }
+
     public val total: Int get() = results.size
     public val killed: Int get() = results.count { it.status == MutantStatus.KILLED }
     public val survived: Int get() = results.count { it.status == MutantStatus.SURVIVED }
     public val noCoverage: Int get() = results.count { it.status == MutantStatus.NO_COVERAGE }
 
     /** The result for the mutant with [id], or `null` if it was not in the sweep. */
-    public fun forMutant(id: String): MutantResult? = results.firstOrNull { it.mutant.id == id }
+    public fun forMutant(id: String): MutantResult? = byMutantId[id]
 
     override fun toString(): String =
         "SweepResult(total=$total, killed=$killed, survived=$survived, noCoverage=$noCoverage)"
