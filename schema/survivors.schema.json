@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://komust.io/schema/survivors.schema.json",
+  "title": "komust survivors.json",
+  "description": "The token-dense projection of report.json carrying only the actionable outcomes: surviving mutants and no-coverage mutants, as two disjoint categories. Derived from report.json. Additive-only within schema major version 1: this schema does NOT set additionalProperties:false, so a document from a later 1.y still validates.",
+  "type": "object",
+  "required": ["schemaVersion", "survivors", "noCoverage"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "survivors": {
+      "type": "array",
+      "description": "Mutants a test covers but no test kills, sorted by (location.path, location.startLine, id).",
+      "items": { "$ref": "#/$defs/survivor" }
+    },
+    "noCoverage": {
+      "type": "array",
+      "description": "Mutants on a line no test executes — their own category. Same sort.",
+      "items": { "$ref": "#/$defs/noCoverageMutant" }
+    }
+  },
+  "$defs": {
+    "survivor": {
+      "type": "object",
+      "required": ["id", "location", "operator", "original", "mutated", "enclosingSymbol", "coveringTests", "summary"],
+      "properties": {
+        "id": { "type": "string" },
+        "location": { "$ref": "#/$defs/sourceLocation" },
+        "operator": { "type": "string" },
+        "original": { "type": "string" },
+        "mutated": { "type": "string" },
+        "enclosingSymbol": { "type": "string" },
+        "coveringTests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "uniqueIds of the tests that ran this mutant and passed anyway — each should have caught the change."
+        },
+        "summary": { "type": "string" }
+      }
+    },
+    "noCoverageMutant": {
+      "type": "object",
+      "required": ["id", "location", "operator", "original", "mutated", "enclosingSymbol", "summary"],
+      "properties": {
+        "id": { "type": "string" },
+        "location": { "$ref": "#/$defs/sourceLocation" },
+        "operator": { "type": "string" },
+        "original": { "type": "string" },
+        "mutated": { "type": "string" },
+        "enclosingSymbol": { "type": "string" },
+        "summary": { "type": "string" }
+      }
+    },
+    "sourceLocation": {
+      "type": "object",
+      "required": ["path", "startLine", "endLine"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Repo-root-relative, /-separated."
+        },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "startColumn": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Spike-gated on #2; omitted when the IR pass has no reliable column span."
+        },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
