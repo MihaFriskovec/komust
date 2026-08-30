@@ -220,8 +220,8 @@ public class ForkedMutantSweep internal constructor(
 
         /** Hand [workerId] the next queued item, or close its input if the queue is empty. */
         private fun pump(workerId: Int) {
-            val item = pending.removeFirstOrNull()
             val handle = handles[workerId] ?: return
+            val item = pending.removeFirstOrNull()
             if (item == null) {
                 assignment.remove(workerId)
                 watch.remove(workerId)

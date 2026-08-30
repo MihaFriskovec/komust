@@ -112,15 +112,20 @@ public object WorkerMain {
                     TestRun.FAILED -> return completed(item, MutantOutcome.Status.KILLED, executed, KillKind.TEST_FAILURE, spec.uniqueId)
                     TestRun.TIMED_OUT -> {
                         emit(completed(item, MutantOutcome.Status.TIMEOUT, executed))
-                        exitProcess(EXIT_TIMEOUT_RECYCLE)
+                        halt(EXIT_TIMEOUT_RECYCLE) // the runaway thread is unkillable — do not run shutdown hooks
                     }
                     TestRun.MEMORY_ERROR -> {
                         emit(completed(item, MutantOutcome.Status.KILLED, executed, KillKind.MEMORY_ERROR))
-                        exitProcess(EXIT_MEMORY_ERROR_RECYCLE)
+                        halt(EXIT_MEMORY_ERROR_RECYCLE) // heap is suspect — do not run shutdown hooks
                     }
                 }
             }
             return completed(item, MutantOutcome.Status.SURVIVED, executed)
+        }
+
+        private fun halt(code: Int): Nothing {
+            Runtime.getRuntime().halt(code)
+            error("unreachable")
         }
 
         /**
