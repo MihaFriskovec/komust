@@ -4,6 +4,7 @@ import com.tschuchort.compiletesting.JvmCompilationResult
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
 import io.komust.runtime.MutantRegistry
+import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
 import java.io.File
 
 /**
@@ -15,7 +16,9 @@ import java.io.File
  * a classloader over the emitted classes plus the raw compiler messages.
  *
  * The fixture's compile classpath carries this module's own `io.komust.runtime`
- * output so a fixture can reference the woven guard once #28 starts injecting it.
+ * output so the woven `mutantActive` guard (#28) resolves, and the result
+ * classloader is parented to the test's, so `MutantRegistry` flips the same slot
+ * the woven code reads.
  */
 object FixtureCompiler {
 
@@ -27,6 +30,7 @@ object FixtureCompiler {
         fileName: String,
         source: String,
         withPlugin: Boolean = true,
+        extraRegistrars: List<CompilerPluginRegistrar> = emptyList(),
     ): Compiled {
         val compilation = KotlinCompilation().apply {
             sources = listOf(SourceFile.kotlin(fileName, source))
@@ -35,7 +39,9 @@ object FixtureCompiler {
             jvmTarget = "21"
             messageOutputStream = System.out
             if (withPlugin) {
-                compilerPluginRegistrars = listOf(KomustCompilerPluginRegistrar())
+                // komust first, then any test-only inspector — registration order
+                // is IR-extension order, so an inspector sees the woven tree.
+                compilerPluginRegistrars = listOf(KomustCompilerPluginRegistrar()) + extraRegistrars
                 commandLineProcessors = listOf(KomustCommandLineProcessor())
             }
         }

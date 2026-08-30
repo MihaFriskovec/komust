@@ -12,9 +12,9 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
  * `kotlinCompilerPluginClasspath` in a real build, or `kotlin-compile-testing`
  * in this module's tests.
  *
- * This skeleton (#27) registers the [KomustIrGenerationExtension] and nothing
- * else. The extension performs an **identity transform**: it walks the module IR
- * and weaves no mutants. #28 hangs the first operator on it.
+ * It registers the [KomustIrGenerationExtension] and nothing else. As of #28
+ * that extension weaves the first operator — the arithmetic additive swap — into
+ * the module with the compile-once model.
  *
  * Per the compat-shim seam rule, this class imports only the SPI type it
  * subclasses and its override signature; message and registration plumbing go
