@@ -72,6 +72,9 @@ Choosing, per mutant, which tests to run. komust's default selection is **covera
 ### No coverage (mutant outcome)
 A mutant on a source line that **no test executes**. It is never run (there is nothing that could kill it) and is reported as `NO_COVERAGE`, distinct from a survivor. Because untested-yet-mutable code is a maximally actionable signal, `NO_COVERAGE` mutants are surfaced in the token-dense agent stream as their own category, not folded into survivors.
 
+### Mutant sweep
+The stage that scores every in-scope mutant. For each mutant it switches that one mutant on via the **runtime switch**, selects its **covering test set** by a direct `(binary class name, source line)` lookup into the **coverage index**, runs those tests **fastest-first** (baseline timing) with **fail-fast** (the first failing test ends the mutant as `KILLED`; all passing is `SURVIVED`), and switches back to the **green baseline**. A mutant with no covering test is `NO_COVERAGE` and is never run. The **sequential sweep** (`komust-engine`, #33) is the single-worker in-process core; the parallel **controller + forked worker pool** with hang-kills, `TIMEOUT`, and cross-mutant state isolation (#34) is layered on top of it. See ADR-0003.
+
 ### Explicit override (test selection)
 A caller-supplied pinning of the test set, at **global** granularity (one set for the whole run) and/or **per-file** granularity. Where an override applies to a mutant it **fully replaces** the coverage-derived covering set (never augments it) — the same replace-not-merge stance as the Mutation Scope override. The coverage pass still runs regardless (the green baseline is non-negotiable); an overridden mutant simply skips the coverage lookup and can therefore never be `NO_COVERAGE`. See ADR-0004.
 

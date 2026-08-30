@@ -20,6 +20,13 @@ dependencies {
     // in-process with the pinned K2 compiler (same mechanism as the
     // compiler-plugin module's tests).
     testImplementation(libs.kctfork.core)
+    // The sweep integration test (#33) compiles that fixture **with the
+    // compiler plugin applied** — it needs the plugin's registrar +
+    // command-line processor to weave mutants, and its `io.komust.runtime`
+    // switch on the fixture's runtime classpath so the woven guard resolves and
+    // `MutantSwitchHandle` flips the same slot. Test-only: the engine's own
+    // main code reaches the runtime switch reflectively (ADR-0005 boundary).
+    testImplementation(project(":komust-compiler-plugin"))
 }
 
 tasks.withType<Test>().configureEach {
