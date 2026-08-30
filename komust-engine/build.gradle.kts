@@ -1,5 +1,9 @@
 plugins {
     id("komust.kotlin-module")
+    // The agent output contract (#5) — report.json / survivors.json — is
+    // (de)serialised with kotlinx.serialization; version comes from the build
+    // classpath (buildSrc pins it to the catalog Kotlin version).
+    kotlin("plugin.serialization")
 }
 
 dependencies {
@@ -7,6 +11,9 @@ dependencies {
     // (ADR-0005 §4) — the launcher is a main dependency here, not just a test one.
     implementation(platform(libs.junit.bom))
     implementation(libs.junit.platform.launcher)
+
+    // report.json / survivors.json models are @Serializable (#5, #35).
+    implementation(libs.kotlinx.serialization.json)
 
     // Coverage pass (ADR-0004): the runtime agent's control API drives per-test
     // dump/reset in-process; the core API turns each `.exec` snapshot into
@@ -16,6 +23,9 @@ dependencies {
     implementation(libs.asm)
 
     testImplementation(libs.junit.jupiter)
+    // The output-contract tests validate the emitted report.json / survivors.json
+    // against the in-repo JSON Schema files under `schema/` (#35).
+    testImplementation(libs.json.schema.validator)
     // The coverage-pass integration test compiles a throwaway fixture project
     // in-process with the pinned K2 compiler (same mechanism as the
     // compiler-plugin module's tests).

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://komust.io/schema/report.schema.json",
+  "title": "komust report.json",
+  "description": "The lossless, canonical record of a komust mutation run: every mutant with its compile-time facts and execution outcome, plus run metadata. Source of truth for survivors.json and the human report. Additive-only within schema major version 1: this schema does NOT set additionalProperties:false, so a document from a later 1.y (with fields this schema does not name) still validates.",
+  "type": "object",
+  "required": ["schemaVersion", "run", "mutants"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semver. Within a major, changes are additive only."
+    },
+    "run": { "$ref": "#/$defs/runMetadata" },
+    "mutants": {
+      "type": "array",
+      "description": "Every mutant, sorted by (location.path, location.startLine, id).",
+      "items": { "$ref": "#/$defs/mutantEntry" }
+    }
+  },
+  "$defs": {
+    "runMetadata": {
+      "type": "object",
+      "required": ["startedAt", "finishedAt", "komustVersion", "operators", "counts"],
+      "properties": {
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "komustVersion": { "type": "string" },
+        "operators": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Operator slugs that produced at least one mutant, sorted."
+        },
+        "counts": { "$ref": "#/$defs/counts" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["total", "killed", "survived", "noCoverage", "timeout"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "killed": { "type": "integer", "minimum": 0 },
+        "survived": { "type": "integer", "minimum": 0 },
+        "noCoverage": { "type": "integer", "minimum": 0 },
+        "timeout": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "mutantEntry": {
+      "type": "object",
+      "required": ["id", "status", "location", "operator", "original", "mutated", "enclosingSymbol", "coveringTests", "testsExecuted"],
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "$ref": "#/$defs/status" },
+        "location": { "$ref": "#/$defs/sourceLocation" },
+        "operator": { "type": "string" },
+        "original": { "type": "string" },
+        "mutated": { "type": "string" },
+        "enclosingSymbol": { "type": "string" },
+        "coveringTests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "JUnit Platform uniqueIds of the covering test set, fastest-first. The whole selected set for KILLED/SURVIVED; empty for NO_COVERAGE."
+        },
+        "testsExecuted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many of coveringTests actually ran — coveringTests.size for SURVIVED, smaller for a fail-fast KILLED, 0 for NO_COVERAGE."
+        },
+        "killedBy": {
+          "type": "string",
+          "description": "uniqueId of the first covering test that failed. Present iff status is KILLED."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Rendered 'write a test that does X' instruction. Present for SURVIVED and NO_COVERAGE."
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["KILLED", "SURVIVED", "NO_COVERAGE", "TIMEOUT"],
+      "description": "NO_COVERAGE is its own category, never folded into SURVIVED. TIMEOUT is scored as killed but reported distinctly."
+    },
+    "sourceLocation": {
+      "type": "object",
+      "required": ["path", "startLine", "endLine"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Repo-root-relative, /-separated."
+        },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "startColumn": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Spike-gated on #2; omitted when the IR pass has no reliable column span."
+        },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

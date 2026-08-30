@@ -1,0 +1,9 @@
+Surviving mutants (2) — a test runs this code but does not catch the change:
+  - Calc.kt:4  Calc.add  `a + b` → `a + b + 1`  [Calc.kt:4:40:CONST_BOUNDARY_ADD_ONE#0]
+      In `Calc.add` (Calc.kt:4), changing `a + b` to `a + b + 1` is not detected — 2 covering tests still pass. Add or strengthen a test of `Calc.add` (Calc.kt:4) so that this change makes it fail.
+  - Calc.kt:6  Calc.mul  `*` → `/`  [Calc.kt:6:40:ARITH_TIMES_TO_DIV#0]
+      In `Calc.mul` (Calc.kt:6), changing `*` to `/` is not detected — 1 covering test still passes. Add or strengthen a test of `Calc.mul` (Calc.kt:6) so that this change makes it fail.
+
+No-coverage mutants (1) — no test executes this code at all:
+  - Bar.kt:10  Bar.clamp  `<` → `<=`  [Bar.kt:10:12:REL_LT_TO_LE#0]
+      In `Bar.clamp` (Bar.kt:10), no test executes the `<` at line 10. Write a test that exercises `Bar.clamp` (Bar.kt:10) and would fail if `<` became `<=`.

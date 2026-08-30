@@ -26,6 +26,10 @@ kotlinxSerialization = "1.9.0"
 # compile of fixture sources in `komust-compiler-plugin`'s tests, against the
 # exact pinned Kotlin above (it resolves the compiler off the test classpath).
 kctfork = "0.8.0"
+# JSON Schema validator (test-only). komust-engine's output-contract tests
+# validate the emitted report.json / survivors.json against the in-repo
+# `schema/*.schema.json` so the schema and the serialised shape cannot drift.
+jsonSchemaValidator = "1.5.6"
 
 [libraries]
 # Provided by the Kotlin compiler at plugin-load time; never shipped.
@@ -53,6 +57,8 @@ jacoco-agent = { module = "org.jacoco:org.jacoco.agent", version.ref = "jacoco" 
 asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
 
 kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
+
+json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "jsonSchemaValidator" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

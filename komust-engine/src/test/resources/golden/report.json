@@ -1,0 +1,94 @@
+{
+  "schemaVersion": "1.0.0",
+  "run": {
+    "startedAt": "2026-08-30T10:00:00Z",
+    "finishedAt": "2026-08-30T10:00:42Z",
+    "komustVersion": "0.1.0-SNAPSHOT",
+    "operators": [
+      "arithmetic",
+      "constant-boundary",
+      "relational"
+    ],
+    "counts": {
+      "total": 4,
+      "killed": 1,
+      "survived": 2,
+      "noCoverage": 1,
+      "timeout": 0
+    }
+  },
+  "mutants": [
+    {
+      "id": "Bar.kt:10:12:REL_LT_TO_LE#0",
+      "status": "NO_COVERAGE",
+      "location": {
+        "path": "src/main/kotlin/fixture/Bar.kt",
+        "startLine": 10,
+        "endLine": 10
+      },
+      "operator": "relational",
+      "original": "<",
+      "mutated": "<=",
+      "enclosingSymbol": "Bar.clamp",
+      "coveringTests": [],
+      "testsExecuted": 0,
+      "summary": "In `Bar.clamp` (Bar.kt:10), no test executes the `<` at line 10. Write a test that exercises `Bar.clamp` (Bar.kt:10) and would fail if `<` became `<=`."
+    },
+    {
+      "id": "Calc.kt:4:40:ARITH_PLUS_TO_MINUS#0",
+      "status": "KILLED",
+      "location": {
+        "path": "src/main/kotlin/fixture/Calc.kt",
+        "startLine": 4,
+        "endLine": 4
+      },
+      "operator": "arithmetic",
+      "original": "+",
+      "mutated": "-",
+      "enclosingSymbol": "Calc.add",
+      "coveringTests": [
+        "[engine:junit-jupiter]/[class:fixture.CalcTest]/[method:addExact()]",
+        "[engine:junit-jupiter]/[class:fixture.CalcTest]/[method:addLoose()]"
+      ],
+      "testsExecuted": 1,
+      "killedBy": "[engine:junit-jupiter]/[class:fixture.CalcTest]/[method:addExact()]"
+    },
+    {
+      "id": "Calc.kt:4:40:CONST_BOUNDARY_ADD_ONE#0",
+      "status": "SURVIVED",
+      "location": {
+        "path": "src/main/kotlin/fixture/Calc.kt",
+        "startLine": 4,
+        "endLine": 4
+      },
+      "operator": "constant-boundary",
+      "original": "a + b",
+      "mutated": "a + b + 1",
+      "enclosingSymbol": "Calc.add",
+      "coveringTests": [
+        "[engine:junit-jupiter]/[class:fixture.CalcTest]/[method:addExact()]",
+        "[engine:junit-jupiter]/[class:fixture.CalcTest]/[method:addLoose()]"
+      ],
+      "testsExecuted": 2,
+      "summary": "In `Calc.add` (Calc.kt:4), changing `a + b` to `a + b + 1` is not detected — 2 covering tests still pass. Add or strengthen a test of `Calc.add` (Calc.kt:4) so that this change makes it fail."
+    },
+    {
+      "id": "Calc.kt:6:40:ARITH_TIMES_TO_DIV#0",
+      "status": "SURVIVED",
+      "location": {
+        "path": "src/main/kotlin/fixture/Calc.kt",
+        "startLine": 6,
+        "endLine": 6
+      },
+      "operator": "arithmetic",
+      "original": "*",
+      "mutated": "/",
+      "enclosingSymbol": "Calc.mul",
+      "coveringTests": [
+        "[engine:junit-jupiter]/[class:fixture.CalcTest]/[method:mulLoose()]"
+      ],
+      "testsExecuted": 1,
+      "summary": "In `Calc.mul` (Calc.kt:6), changing `*` to `/` is not detected — 1 covering test still passes. Add or strengthen a test of `Calc.mul` (Calc.kt:6) so that this change makes it fail."
+    }
+  ]
+}
