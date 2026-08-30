@@ -1,12 +1,15 @@
 plugins {
     id("komust.kotlin-module")
-    // The controller <-> worker-JVM wire protocol (#34) is line-framed JSON.
+    // kotlinx.serialization: the agent output contract (#5/#35) report.json /
+    // survivors.json models are @Serializable, and the controller <-> worker-JVM
+    // wire protocol (#34) is line-framed JSON. Version comes from the build
+    // classpath (buildSrc pins it to the catalog Kotlin version).
     kotlin("plugin.serialization")
 }
 
 dependencies {
-    // Worker-pool IPC (#34): WorkItem / WorkerMessage are (de)serialised as
-    // one JSON object per line over the worker process's stdin/stdout.
+    // report.json / survivors.json models are @Serializable (#5, #35); the
+    // worker-pool IPC (#34) sends one JSON WorkItem / WorkerMessage per line.
     implementation(libs.kotlinx.serialization.json)
 
     // The engine drives tests through the JUnit Platform Launcher API directly
@@ -22,6 +25,9 @@ dependencies {
     implementation(libs.asm)
 
     testImplementation(libs.junit.jupiter)
+    // The output-contract tests validate the emitted report.json / survivors.json
+    // against the in-repo JSON Schema files under `schema/` (#35).
+    testImplementation(libs.json.schema.validator)
     // The coverage-pass integration test compiles a throwaway fixture project
     // in-process with the pinned K2 compiler (same mechanism as the
     // compiler-plugin module's tests).

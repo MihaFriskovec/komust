@@ -139,12 +139,17 @@ class MutantFixtureProject private constructor(
 
         // `komust-mutant id=<file>:<line>:<col>:<token>#<ord> op=<slug> class=<binaryName> startOffset=… path=… desc=…`
         private val MUTANT_LINE =
-            Regex("""komust-mutant id=(\S+) op=\S+ class=(\S+) startOffset=\d+ path=\S+ desc=.*""")
+            Regex("""komust-mutant id=(\S+) op=\S+ class=(\S+) startOffset=\d+ path=(\S+) desc=.*""")
 
         private fun parseMutants(messages: String): List<Mutant> {
             val mutants = MUTANT_LINE.findAll(messages).map { m ->
                 val id = m.groupValues[1]
-                Mutant(id = id, binaryClassName = m.groupValues[2], line = id.split(":")[1].toInt())
+                Mutant(
+                    id = id,
+                    binaryClassName = m.groupValues[2],
+                    line = id.split(":")[1].toInt(),
+                    sourceFile = m.groupValues[3],
+                )
             }.toList()
             val dupes = mutants.groupingBy { it.id }.eachCount().filterValues { it > 1 }.keys
             check(dupes.isEmpty()) { "the plugin was applied more than once — duplicate mutant ids: $dupes" }
