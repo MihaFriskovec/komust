@@ -46,6 +46,20 @@ public class UnresolvableCoveringTestException(public val test: TestId) : Runtim
 )
 
 /**
+ * A test id supplied by the `--tests` explicit override ([TestSelectionOverride])
+ * resolved to no runnable test.
+ *
+ * Distinct from [UnresolvableCoveringTestException] so the message points at the
+ * override input — a typo or a since-renamed test in the pinned set — rather than
+ * misattributing it to coverage-pass drift. Equally terminal: a pinned id that
+ * runs nothing would silently score the mutant `SURVIVED` off zero tests.
+ */
+public class UnknownPinnedTestException(public val test: TestId) : RuntimeException(
+    "the --tests override pinned '$test', which resolved to no runnable test — " +
+        "check that id against the tests actually on the test classpath",
+)
+
+/**
  * The production [CoveringTestRunner]: re-selects one test by its
  * `TestIdentifier.getUniqueId()` (the [TestId] the coverage index stored) and
  * runs it through the **JUnit Platform Launcher API** directly (ADR-0005 §4).
