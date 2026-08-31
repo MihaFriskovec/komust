@@ -702,6 +702,7 @@ internal object KotlinIrCompat {
             if (!scopeFilter.unfiltered && !enclosingSymbolInScope(file)) return original
 
             val fileName = path.substringAfterLast('/')
+            val enclosing = enclosingSymbol(file)
             var acc: IrExpression = original
             for (candidate in candidates.asReversed()) {
                 val positionKey = "$line:$column:${candidate.token}"
@@ -717,6 +718,8 @@ internal object KotlinIrCompat {
                     ordinal = ordinal,
                     binaryClassName = binaryClassName(enclosingClass(), file),
                     startOffset = original.startOffset,
+                    endLine = enclosing?.endLine ?: line,
+                    enclosingSymbol = enclosing?.name ?: fileName,
                 )
                 val builder = DeclarationIrBuilder(pluginContext, scopeOwner, original.startOffset, original.endOffset)
                 val elsePart = acc
@@ -776,19 +779,37 @@ internal object KotlinIrCompat {
          * undefined/synthetic is skipped too, so an outer locatable member still
          * wins. `null` only when no locatable enclosing member is found.
          */
-        private fun enclosingSymbolLineSpan(file: IrFile): Pair<Int, Int>? {
+        private fun enclosingSymbolLineSpan(file: IrFile): Pair<Int, Int>? =
+            enclosingSymbol(file)?.let { it.startLine to it.endLine }
+
+        /** The site's nearest enclosing member declaration: name + 1-based inclusive line span. */
+        private data class EnclosingSymbol(val name: String, val startLine: Int, val endLine: Int)
+
+        /**
+         * The site's nearest enclosing **member declaration** — a member/top-level
+         * function, a property initializer (its backing field), or an `init`
+         * block (CONTEXT.md, "Enclosing symbol"): its simple name and 1-based
+         * inclusive source-line span. Local functions and lambdas are
+         * transparent (the walk steps over them); a declaration with
+         * undefined/synthetic offsets is skipped so an outer locatable member
+         * still wins. `null` when no locatable enclosing member is found.
+         */
+        private fun enclosingSymbol(file: IrFile): EnclosingSymbol? {
             val entry = file.fileEntry
             for (scope in allScopes.asReversed()) {
-                val enclosing = when (val element = scope.irElement) {
+                val (element, name) = when (val e = scope.irElement) {
                     is IrFunction ->
-                        if (element.visibility == DescriptorVisibilities.LOCAL) null else element
-                    is IrField -> element
-                    is IrAnonymousInitializer -> element
+                        if (e.visibility == DescriptorVisibilities.LOCAL) null else (e to e.name.asString())
+                    is IrField -> e to e.name.asString()
+                    is IrAnonymousInitializer -> e to "<init>"
                     else -> null
                 } ?: continue
-                if (enclosing.startOffset < 0 || enclosing.endOffset < 0) continue
-                return (entry.getLineNumber(enclosing.startOffset) + 1) to
-                    (entry.getLineNumber(enclosing.endOffset) + 1)
+                if (element.startOffset < 0 || element.endOffset < 0) continue
+                return EnclosingSymbol(
+                    name = name,
+                    startLine = entry.getLineNumber(element.startOffset) + 1,
+                    endLine = entry.getLineNumber(element.endOffset) + 1,
+                )
             }
             return null
         }

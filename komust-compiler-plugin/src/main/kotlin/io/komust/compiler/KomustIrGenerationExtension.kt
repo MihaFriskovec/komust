@@ -31,6 +31,8 @@ internal class KomustIrGenerationExtension(
     private val diagnostics: PluginDiagnostics,
     private val config: OperatorConfig,
     private val scopeFilter: MutationScopeFilter,
+    private val manifestPath: String? = null,
+    private val projectDir: String? = null,
 ) : IrGenerationExtension {
 
     override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
@@ -46,5 +48,15 @@ internal class KomustIrGenerationExtension(
         diagnostics.info(
             "komust: woven ${woven.size} mutant(s) over module '$module' — compile-once / runtime-switched",
         )
+
+        // The mutation manifest — the engine's slice of the input contract (#38,
+        // ADR-0005). A per-source-set compilation each writes its own; the
+        // Gradle plugin points every mutation compilation at a distinct path.
+        manifestPath?.let { path ->
+            runCatching { MutationManifestWriter.write(path, woven, projectDir) }
+                .onFailure {
+                    diagnostics.warn("komust: could not write the mutation manifest to '$path' (${it.message})")
+                }
+        }
     }
 }

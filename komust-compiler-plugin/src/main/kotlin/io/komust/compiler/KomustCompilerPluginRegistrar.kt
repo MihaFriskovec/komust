@@ -30,6 +30,7 @@ public class KomustCompilerPluginRegistrar : CompilerPluginRegistrar() {
         val config = OperatorConfig.resolve(
             disabledSlugs = configuration.get(KomustCommandLineProcessor.KEY_DISABLED_OPERATORS).orEmpty(),
             enabledSlugs = configuration.get(KomustCommandLineProcessor.KEY_ENABLED_OPERATORS).orEmpty(),
+            experimentalTier = configuration.get(KomustCommandLineProcessor.KEY_EXPERIMENTAL_TIER) ?: false,
             onUnknownSlug = { slug ->
                 diagnostics.warn("komust: unknown operator slug '$slug' in the enabled/disabled-operators option — ignoring.")
             },
@@ -40,7 +41,13 @@ public class KomustCompilerPluginRegistrar : CompilerPluginRegistrar() {
         )
         KotlinIrCompat.registerIrExtension(
             this,
-            KomustIrGenerationExtension(diagnostics, config, scopeFilter),
+            KomustIrGenerationExtension(
+                diagnostics,
+                config,
+                scopeFilter,
+                configuration.get(KomustCommandLineProcessor.KEY_MANIFEST_PATH),
+                configuration.get(KomustCommandLineProcessor.KEY_PROJECT_DIR),
+            ),
         )
     }
 }
