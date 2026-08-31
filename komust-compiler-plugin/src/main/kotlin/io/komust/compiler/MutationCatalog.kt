@@ -65,12 +65,16 @@ internal data class OperatorConfig(val enabled: Set<MutationOperatorId>) {
         val DEFAULT: OperatorConfig = OperatorConfig(MutationOperatorId.defaultTier)
 
         /**
-         * Resolve `default-tier minus [disabledSlugs] plus [enabledSlugs]`.
+         * Resolve `(default-tier [+ experimental-tier]) minus [disabledSlugs]
+         * plus [enabledSlugs]`. [experimentalTier] turns the whole
+         * [Tier.EXPERIMENTAL] set on (`komust { operators { experimental } }`);
+         * [enabledSlugs] is the finer opt-in for a single experimental operator.
          * [onUnknownSlug] is called once per slug that matches no operator.
          */
         fun resolve(
             disabledSlugs: List<String>,
             enabledSlugs: List<String>,
+            experimentalTier: Boolean = false,
             onUnknownSlug: (String) -> Unit = {},
         ): OperatorConfig {
             fun resolveSlugs(slugs: List<String>): Set<MutationOperatorId> =
@@ -78,7 +82,8 @@ internal data class OperatorConfig(val enabled: Set<MutationOperatorId>) {
                     MutationOperatorId.bySlug(slug.trim()).also { if (it == null) onUnknownSlug(slug.trim()) }
                 }.toSet()
 
-            val enabled = (MutationOperatorId.defaultTier - resolveSlugs(disabledSlugs)) + resolveSlugs(enabledSlugs)
+            val base = if (experimentalTier) MutationOperatorId.entries.toSet() else MutationOperatorId.defaultTier
+            val enabled = (base - resolveSlugs(disabledSlugs)) + resolveSlugs(enabledSlugs)
             return OperatorConfig(enabled)
         }
     }

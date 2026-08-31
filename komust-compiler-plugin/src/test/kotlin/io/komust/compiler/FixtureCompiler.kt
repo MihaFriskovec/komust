@@ -44,10 +44,12 @@ object FixtureCompiler {
         extraFiles: List<Pair<String, String>> = emptyList(),
         scopeJson: String? = null,
         scopeOptionValue: String? = null,
+        writeManifest: Boolean = false,
     ): Compiled {
         require(scopeJson == null || scopeOptionValue == null) {
             "pass at most one of scopeJson / scopeOptionValue"
         }
+        var manifestFile: File? = null
         val compilation = KotlinCompilation().apply {
             sources = listOf(SourceFile.kotlin(fileName, source)) +
                 extraFiles.map { (name, text) -> SourceFile.kotlin(name, text) }
@@ -55,6 +57,7 @@ object FixtureCompiler {
             inheritClassPath = false
             jvmTarget = "21"
             messageOutputStream = System.out
+            if (writeManifest) manifestFile = workingDir.resolve("mutants.json")
             if (withPlugin) {
                 // komust first, then any test-only inspector — registration order
                 // is IR-extension order, so an inspector sees the woven tree.
@@ -72,15 +75,30 @@ object FixtureCompiler {
                     if (scopeValue != null) {
                         add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "scope", scopeValue))
                     }
+                    manifestFile?.let {
+                        add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "manifest", it.absolutePath))
+                        // kctfork writes fixture sources under <workingDir>/sources — relative
+                        // manifest paths (e.g. `Calc.kt`) come out against that root.
+                        add(
+                            PluginOption(
+                                KomustCommandLineProcessor.PLUGIN_ID,
+                                "projectDir",
+                                workingDir.resolve("sources").absolutePath,
+                            ),
+                        )
+                    }
                 }
             }
         }
-        return Compiled(compilation.compile())
+        return Compiled(compilation.compile(), manifestFile)
     }
 
-    class Compiled(private val delegate: JvmCompilationResult) {
+    class Compiled(private val delegate: JvmCompilationResult, private val manifestFile: File? = null) {
         val ok: Boolean get() = delegate.exitCode == KotlinCompilation.ExitCode.OK
         val messages: String get() = delegate.messages
+
+        /** The mutation-manifest JSON the plugin wrote (`writeManifest = true`), or null. */
+        val manifestText: String? get() = manifestFile?.takeIf { it.exists() }?.readText()
 
         /** Every mutant the plugin reported it wove, in traversal order. */
         val mutants: List<Mutant> by lazy {

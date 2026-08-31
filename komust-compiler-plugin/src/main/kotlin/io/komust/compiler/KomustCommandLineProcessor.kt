@@ -23,6 +23,9 @@ import org.jetbrains.kotlin.config.CompilerConfigurationKey
  *  - `scope` — path to the resolved `scope.json` for enclosing-symbol expansion
  *    (#30, ADR-0002 §3). Single-valued; absent ⇒ the whole module is woven
  *    (the `--all` run).
+ *  - `manifest` — path to write the **mutation manifest** JSON (#38): every
+ *    woven mutant's compile-time facts, the engine's slice of the input
+ *    contract (ADR-0005). Single-valued; absent ⇒ no manifest is written.
  *
  * [pluginId] is the namespace every option is addressed under
  * (`-P plugin:io.komust.compiler:<key>=<value>`); it must match the
@@ -48,9 +51,30 @@ public class KomustCommandLineProcessor : CommandLineProcessor {
             allowMultipleOccurrences = true,
         ),
         CliOption(
+            optionName = OPTION_EXPERIMENTAL_TIER,
+            valueDescription = "true|false",
+            description = "Turn the whole experimental operator tier on (komust { operators { experimental } })",
+            required = false,
+            allowMultipleOccurrences = false,
+        ),
+        CliOption(
             optionName = OPTION_SCOPE,
             valueDescription = "<path>",
             description = "Path to the resolved scope.json for enclosing-symbol expansion",
+            required = false,
+            allowMultipleOccurrences = false,
+        ),
+        CliOption(
+            optionName = OPTION_MANIFEST,
+            valueDescription = "<path>",
+            description = "Path to write the mutation manifest JSON (the engine input contract, #38)",
+            required = false,
+            allowMultipleOccurrences = false,
+        ),
+        CliOption(
+            optionName = OPTION_PROJECT_DIR,
+            valueDescription = "<path>",
+            description = "Project directory — mutation-manifest source paths are made relative to it",
             required = false,
             allowMultipleOccurrences = false,
         ),
@@ -62,8 +86,14 @@ public class KomustCommandLineProcessor : CommandLineProcessor {
                 configuration.appendCsv(KEY_DISABLED_OPERATORS, value)
             OPTION_ENABLED_OPERATORS ->
                 configuration.appendCsv(KEY_ENABLED_OPERATORS, value)
+            OPTION_EXPERIMENTAL_TIER ->
+                configuration.put(KEY_EXPERIMENTAL_TIER, value.toBoolean())
             OPTION_SCOPE ->
                 configuration.put(KEY_SCOPE_PATH, value)
+            OPTION_MANIFEST ->
+                configuration.put(KEY_MANIFEST_PATH, value)
+            OPTION_PROJECT_DIR ->
+                configuration.put(KEY_PROJECT_DIR, value)
             else -> Unit
         }
     }
@@ -79,13 +109,22 @@ public class KomustCommandLineProcessor : CommandLineProcessor {
 
         internal const val OPTION_DISABLED_OPERATORS: String = "disabledOperators"
         internal const val OPTION_ENABLED_OPERATORS: String = "enabledOperators"
+        internal const val OPTION_EXPERIMENTAL_TIER: String = "experimentalTier"
         internal const val OPTION_SCOPE: String = "scope"
+        internal const val OPTION_MANIFEST: String = "manifest"
+        internal const val OPTION_PROJECT_DIR: String = "projectDir"
 
         internal val KEY_DISABLED_OPERATORS: CompilerConfigurationKey<List<String>> =
             CompilerConfigurationKey.create("komust disabled operator slugs")
         internal val KEY_ENABLED_OPERATORS: CompilerConfigurationKey<List<String>> =
             CompilerConfigurationKey.create("komust enabled operator slugs")
+        internal val KEY_EXPERIMENTAL_TIER: CompilerConfigurationKey<Boolean> =
+            CompilerConfigurationKey.create("komust experimental tier on")
         internal val KEY_SCOPE_PATH: CompilerConfigurationKey<String> =
             CompilerConfigurationKey.create("komust scope.json path")
+        internal val KEY_MANIFEST_PATH: CompilerConfigurationKey<String> =
+            CompilerConfigurationKey.create("komust mutation manifest path")
+        internal val KEY_PROJECT_DIR: CompilerConfigurationKey<String> =
+            CompilerConfigurationKey.create("komust project directory")
     }
 }

@@ -45,6 +45,20 @@ internal data class WovenMutant(
     val ordinal: Int,
     val binaryClassName: String,
     val startOffset: Int,
+    /**
+     * 1-based, inclusive last source line of the site's nearest enclosing member
+     * declaration — the other end of the span [line] opens. Together they give
+     * the `report.json` `location` range (#5) and the mutation manifest (#38)
+     * a symbol-level extent, not a bare line. Falls back to [line] when no
+     * enclosing member could be located.
+     */
+    val endLine: Int = line,
+    /**
+     * The nearest enclosing member declaration's simple name — the unit an agent
+     * writes a targeting test against (CONTEXT.md — **Enclosing symbol**). `<init>`
+     * for an `init` block; the file base name when no enclosing member is found.
+     */
+    val enclosingSymbol: String = fileName,
 ) {
     /** The stable key string: `<file>:<line>:<col>:<token>#<ordinal>`. */
     val id: String = "$fileName:$line:$column:$token#$ordinal"

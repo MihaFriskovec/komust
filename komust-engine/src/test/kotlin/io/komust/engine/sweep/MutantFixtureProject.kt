@@ -4,6 +4,7 @@ package io.komust.engine.sweep
 
 import com.tschuchort.compiletesting.JvmCompilationResult
 import com.tschuchort.compiletesting.KotlinCompilation
+import com.tschuchort.compiletesting.PluginOption
 import com.tschuchort.compiletesting.SourceFile
 import com.tschuchort.compiletesting.addPreviousResultToClasspath
 import io.komust.compiler.KomustCommandLineProcessor
@@ -34,6 +35,8 @@ class MutantFixtureProject private constructor(
     val classLoader: ClassLoader,
     private val sources: List<Pair<String, String>>,
     val mutants: List<Mutant>,
+    /** The compiler plugin's `mutants.json` for the production compile (#38). */
+    val manifestPath: Path,
 ) {
     fun coverageInput() = CoveragePassInput(listOf(prodDir), listOf(testDir))
 
@@ -92,13 +95,19 @@ class MutantFixtureProject private constructor(
                 loader,
                 mainSources + testSources,
                 main.mutants,
+                main.manifestPath,
             )
         }
 
-        private class MainCompile(val result: JvmCompilationResult, val mutants: List<Mutant>)
+        private class MainCompile(
+            val result: JvmCompilationResult,
+            val mutants: List<Mutant>,
+            val manifestPath: Path,
+        )
 
         private fun compileMain(workDir: File, sources: List<Pair<String, String>>): MainCompile {
             workDir.mkdirs()
+            val manifest = workDir.resolve("mutants.json")
             val compilation = KotlinCompilation().apply {
                 this.workingDir = workDir
                 this.sources = sources.map { (name, text) -> SourceFile.kotlin(name, text) }
@@ -107,13 +116,22 @@ class MutantFixtureProject private constructor(
                 messageOutputStream = System.out
                 compilerPluginRegistrars = listOf(KomustCompilerPluginRegistrar())
                 commandLineProcessors = listOf(KomustCommandLineProcessor())
-                // No plugin options → full default catalog, whole module in scope.
+                // Full default catalog, whole module in scope — plus the mutation
+                // manifest the engine reads as its input contract (#38).
+                pluginOptions = listOf(
+                    PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "manifest", manifest.absolutePath),
+                    PluginOption(
+                        KomustCommandLineProcessor.PLUGIN_ID,
+                        "projectDir",
+                        workDir.resolve("sources").absolutePath,
+                    ),
+                )
             }
             val result = compilation.compile()
             check(result.exitCode == KotlinCompilation.ExitCode.OK) {
                 "fixture main compilation failed:\n${result.messages}"
             }
-            return MainCompile(result, parseMutants(result.messages))
+            return MainCompile(result, parseMutants(result.messages), manifest.toPath())
         }
 
         private fun compileTests(

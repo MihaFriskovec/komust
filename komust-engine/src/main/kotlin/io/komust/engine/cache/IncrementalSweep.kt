@@ -130,18 +130,28 @@ private fun CacheEntry.toResultOrNull(mutant: Mutant): MutantResult? =
         }
     }
 
-private fun MutantResult.toCacheEntry(fingerprint: ValidityFingerprint): CacheEntry =
-    CacheEntry(
+private fun MutantResult.toCacheEntry(fingerprint: ValidityFingerprint): CacheEntry? {
+    val cached = status.toCached() ?: return null
+    return CacheEntry(
         id = mutant.id,
         fingerprint = fingerprint.hex,
-        status = status.toCached(),
+        status = cached,
         coveringTests = coveringTests.map { test ->
             CachedCoveringTest(test.uniqueId, killed = test == killedBy)
         },
     )
+}
 
-private fun MutantStatus.toCached(): CachedStatus = when (this) {
+/**
+ * The [CachedStatus] a fresh outcome is stored as, or `null` when it must not be
+ * cached. A [MutantStatus.TIMEOUT] is environment-sensitive (it depends on the
+ * machine's speed and load, not just the fingerprint determinants), so it is
+ * never persisted — the cache is best-effort and re-executing it is always safe
+ * (CONTEXT.md — **Mutant-result cache**).
+ */
+private fun MutantStatus.toCached(): CachedStatus? = when (this) {
     MutantStatus.KILLED -> CachedStatus.KILLED
     MutantStatus.SURVIVED -> CachedStatus.SURVIVED
     MutantStatus.NO_COVERAGE -> CachedStatus.NO_COVERAGE
+    MutantStatus.TIMEOUT -> null
 }
