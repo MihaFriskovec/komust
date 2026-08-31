@@ -3,6 +3,9 @@
 build/
 !gradle/wrapper/gradle-wrapper.jar
 
+# JaCoCo coverage dumps the komust engine drops in the working dir
+*.exec
+
 # OS / editor
 .DS_Store
 *.log
