@@ -37,6 +37,7 @@ public fun main(args: Array<String>) {
             )
             println("komust: report → ${outcome.report.reportJson}")
             println("komust: survivors → ${outcome.report.survivorsJson}")
+            outcome.report.humanReport?.let { println("komust: human report → $it") }
             exitProcess(0)
         }
 

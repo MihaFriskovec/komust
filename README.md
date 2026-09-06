@@ -108,8 +108,8 @@ komust {
     }
 
     output {
-        humanReport.set(true)        // render report.txt (default: true)
-        consoleSurvivorsOnly.set(false)
+        humanReport.set(true)        // write build/komust/report.txt (default: true)
+        consoleSurvivorsOnly.set(false)  // also print the survivor stream to the console (default: false)
     }
 }
 ```

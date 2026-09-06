@@ -55,6 +55,18 @@ class KomustPluginWiringTest {
         assertEquals(setOf("all", "since", "files", "scope", "tests", "no-cache"), declared)
     }
 
+    @Test fun `mutationTestReport finalizes mutationTest so the summary always shows`() {
+        val project = project()
+        val report = project.tasks.findByName("mutationTestReport")
+        assertNotNull(report, "mutationTestReport not registered")
+
+        val mutationTest = project.tasks.named("mutationTest").get()
+        assertTrue(
+            mutationTest.finalizedBy.getDependencies(mutationTest).any { it.name == "mutationTestReport" },
+            "mutationTest is not finalizedBy mutationTestReport",
+        )
+    }
+
     @Test fun `getPluginArtifact and compilerPluginId point at the compiler plugin`() {
         val plugin = KomustGradlePlugin()
         assertEquals("io.komust", plugin.getPluginArtifact().groupId)

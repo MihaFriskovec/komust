@@ -7,10 +7,12 @@ contract** (#5, ADR-0005). A run writes three files under `build/komust/`:
 | --------------- | --------------------------------------------------------------------------------------- |
 | `report.json`   | Lossless canonical record — every mutant + full run metadata. **The source of truth.**  |
 | `survivors.json`| Token-dense projection — only the actionable outcomes, sized for an agent context window.|
-| `report.txt`    | Human report, rendered **from** `report.json` so it can never disagree with it.          |
+| `report.txt`    | Human report, rendered **from** `report.json` so it can never disagree with it. Written only when `komust { output { humanReport } }` is on (the default). |
 
 `survivors.json` and `report.txt` are derived from the re-read `report.json`, not
-from run state.
+from run state. With `output { consoleSurvivorsOnly = true }` the same survivor
+stream (survivors + no-coverage mutants, each with its `summary`) is also printed
+to the console at the end of a run.
 
 ## `report.json`
 

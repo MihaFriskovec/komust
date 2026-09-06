@@ -6,7 +6,9 @@ import io.komust.engine.coverage.CoveragePassInput
 import io.komust.engine.coverage.CoveragePassResult
 import io.komust.engine.coverage.TestId
 import io.komust.engine.report.Counts
+import io.komust.engine.report.HumanReport
 import io.komust.engine.report.ReportBuilder
+import io.komust.engine.report.ReportJson
 import io.komust.engine.report.ReportWriter
 import io.komust.engine.report.WrittenReport
 import io.komust.engine.sweep.Mutant
@@ -18,6 +20,7 @@ import io.komust.engine.sweep.TimeoutPolicy
 import io.komust.engine.sweep.forked.ForkedMutantSweep
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.io.path.readText
 
 /**
  * The **core engine** (ADR-0005): given an [EngineInput], runs the coverage pass
@@ -40,7 +43,12 @@ public object EngineRunner {
         public data class Aborted(val reason: String) : Outcome
     }
 
-    public fun run(input: EngineInput): Outcome {
+    /**
+     * Runs the pipeline. [console] receives the token-dense survivor stream when
+     * `EngineConfig.consoleSurvivorsOnly` is on (#62) — defaulted to `System.out`
+     * so the forked engine JVM prints it for the build log; tests pass their own.
+     */
+    public fun run(input: EngineInput, console: Appendable = System.out): Outcome {
         val startedAt = Instant.now()
 
         val parsed = try {
@@ -69,7 +77,19 @@ public object EngineRunner {
             sweep = sweep,
             run = ReportBuilder.RunInfo(startedAt, Instant.now(), input.komustVersion),
         )
-        val written = ReportWriter.write(Path.of(input.outputDir), report)
+        val written = ReportWriter.write(
+            Path.of(input.outputDir),
+            report,
+            humanReport = input.config.humanReport,
+        )
+
+        if (input.config.consoleSurvivorsOnly) {
+            // Render from the persisted JSON, not the in-memory report, so the
+            // console stream provably matches survivors.json (story 29 / #62).
+            val persisted = ReportJson.decodeReport(written.reportJson.readText())
+            console.append(HumanReport.renderSurvivorsOnly(persisted))
+        }
+
         return Outcome.Completed(written, report.run.counts)
     }
 

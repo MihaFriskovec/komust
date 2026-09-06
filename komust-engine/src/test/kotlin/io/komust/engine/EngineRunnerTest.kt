@@ -8,6 +8,7 @@ import io.komust.engine.sweep.MutantFixtureProject
 import io.komust.runtime.MutantRegistry
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -59,7 +60,11 @@ class EngineRunnerTest {
 
     @AfterEach fun reset() = MutantRegistry.clear()
 
-    private fun run(tmp: Path): EngineRunner.Outcome {
+    private fun run(
+        tmp: Path,
+        config: EngineInput.EngineConfig = EngineInput.EngineConfig(workers = 2),
+        console: Appendable = StringBuilder(),
+    ): EngineRunner.Outcome {
         val fx = MutantFixtureProject.compile(
             tmp.toFile().resolve("proj"),
             mainSources = listOf(CALC),
@@ -73,13 +78,13 @@ class EngineRunnerTest {
             workerClasspath = fx.workerClasspath.map { it.toString() },
             reloadableRoots = fx.reloadableRoots.map { it.toString() },
             outputDir = tmp.resolve("out").toString(),
-            config = EngineInput.EngineConfig(workers = 2),
+            config = config,
             komustVersion = "9.9.9-test",
         )
         val previous = Thread.currentThread().contextClassLoader
         Thread.currentThread().contextClassLoader = fx.classLoader
         return try {
-            EngineRunner.run(input)
+            EngineRunner.run(input, console)
         } finally {
             Thread.currentThread().contextClassLoader = previous
         }
@@ -116,7 +121,39 @@ class EngineRunnerTest {
         assertTrue(survivors.survivors.all { it.summary.isNotBlank() })
 
         // report.txt renders from the JSON (story 16).
-        assertTrue(completed.report.humanReport.readText().isNotBlank())
+        assertTrue(completed.report.humanReport!!.readText().isNotBlank())
+    }
+
+    @Test fun `consoleSurvivorsOnly streams the token-dense survivor view to the console`(@TempDir tmp: Path) {
+        val console = StringBuilder()
+        val outcome = run(
+            tmp,
+            config = EngineInput.EngineConfig(workers = 2, consoleSurvivorsOnly = true),
+            console = console,
+        )
+        assertInstanceOf<EngineRunner.Outcome.Completed>(outcome)
+
+        val printed = console.toString()
+        assertTrue(printed.contains("Surviving mutants"), printed)
+        assertTrue(printed.contains("mul"), printed)
+        assertTrue(printed.contains("No-coverage mutants"), printed)
+        assertTrue(printed.contains("unused"), printed)
+    }
+
+    @Test fun `consoleSurvivorsOnly is off by default — nothing is printed`(@TempDir tmp: Path) {
+        val console = StringBuilder()
+        run(tmp, console = console)
+        assertEquals("", console.toString())
+    }
+
+    @Test fun `humanReport = false stops report_txt and drops its path`(@TempDir tmp: Path) {
+        val outcome = run(tmp, config = EngineInput.EngineConfig(workers = 2, humanReport = false))
+        val completed = assertInstanceOf<EngineRunner.Outcome.Completed>(outcome)
+
+        assertEquals(null, completed.report.humanReport)
+        assertFalse(java.nio.file.Files.exists(tmp.resolve("out").resolve("report.txt")))
+        assertTrue(completed.report.reportJson.toFile().isFile)
+        assertTrue(completed.report.survivorsJson.toFile().isFile)
     }
 
     @Test fun `report_json mutants carry the manifest's repo-relative location`(@TempDir tmp: Path) {

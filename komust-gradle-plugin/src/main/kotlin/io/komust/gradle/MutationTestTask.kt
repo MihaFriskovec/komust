@@ -3,6 +3,7 @@ package io.komust.gradle
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.Input
@@ -92,6 +93,24 @@ public abstract class MutationTestTask : DefaultTask() {
     @get:OutputDirectory
     public abstract val outputDirectory: DirectoryProperty
 
+    /**
+     * The forked engine's run summary, persisted so `mutationTestReport` can
+     * re-show it when a re-run is UP-TO-DATE (#62). Deliberately **not** a
+     * tracked output — it lives under `build/tmp/`, so writing it never
+     * perturbs this task's up-to-date state.
+     */
+    @get:Internal
+    public abstract val runSummaryFile: RegularFileProperty
+
+    /**
+     * Written on every successful execution; `mutationTestReport` consumes-and-clears
+     * it purely to word its header ("run complete" vs "up to date — last run"). A
+     * stale marker only mis-labels one report and then self-heals — it never
+     * suppresses the summary.
+     */
+    @get:Internal
+    public abstract val runMarkerFile: RegularFileProperty
+
     @get:Input public abstract val workers: Property<Int>
     @get:Input public abstract val timeoutFactor: Property<Double>
     @get:Input public abstract val cache: Property<Boolean>
@@ -107,6 +126,11 @@ public abstract class MutationTestTask : DefaultTask() {
     public fun mutationTest() {
         val out = outputDirectory.get().asFile
         out.mkdirs()
+
+        // Clear the persisted summary first thing: if this run fails anywhere
+        // below, `mutationTestReport` must not re-show a previous run's numbers
+        // as if they were this one's (#62).
+        runSummaryFile.get().asFile.delete()
 
         val jacocoAgent = engineClasspath.files.firstOrNull { it.name.matches(JACOCO_AGENT) }
             ?: error(
@@ -147,22 +171,47 @@ public abstract class MutationTestTask : DefaultTask() {
         val inputJson = out.resolve("engine-input.json")
         EngineInputWriter.write(inputJson, model)
 
+        // The forked engine prints its run summary + the token-dense survivor
+        // stream to stdout. Capture stdout so we can persist it and re-emit it
+        // through Gradle's lifecycle logging — the default rich console swallows
+        // a fork's raw stdout (#62). stderr stays wired straight through, so
+        // abort reasons and any diagnostics show live even while the run hangs.
+        val forkOut = java.io.ByteArrayOutputStream()
         val result = exec.javaexec { spec ->
             spec.mainClass.set("io.komust.engine.EngineMainKt")
             spec.classpath = engineClasspath + runtimeGuardClasspath + classesUnderTest + testClassRoots +
                 testRuntimeClasspath + mainRuntimeClasspath
             spec.args(inputJson.absolutePath)
             spec.jvmArgs("-javaagent:${jacocoAgent.absolutePath}")
+            spec.standardOutput = forkOut
+            spec.errorOutput = System.err
             spec.isIgnoreExitValue = true
         }
+
+        val summaryLines = forkOut.toString(Charsets.UTF_8.name())
+            .lineSequence()
+            .map { it.trimEnd() }
+            .filter { it.isNotBlank() }
+            .toList()
+
         val code = result.exitValue
         if (code != 0) {
+            summaryLines.forEach { logger.lifecycle(it) }
             throw org.gradle.api.GradleException(
                 "komust: the mutation run exited with code $code — see the output above and " +
                     "${outputDirectory.get().asFile.resolve("report.txt")}",
             )
         }
-        logger.lifecycle("komust: report → ${out.resolve("report.json")}")
+
+        // Persist the summary so `mutationTestReport` — which always runs — can
+        // show it on this run and re-show it on a later UP-TO-DATE re-run where
+        // this action never fires (#62). Written under the build dir but outside
+        // the tracked output dir, so it never perturbs up-to-date state.
+        runSummaryFile.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText(summaryLines.joinToString("\n", postfix = "\n"))
+        }
+        runMarkerFile.get().asFile.apply { parentFile.mkdirs(); writeText("ran\n") }
     }
 
     /** `--tests` value → (global ids, per-file id sets). `path=a;b` segments are per-file; bare ids are global. */

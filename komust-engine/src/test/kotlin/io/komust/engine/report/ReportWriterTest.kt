@@ -3,6 +3,7 @@ package io.komust.engine.report
 import java.nio.file.Path
 import kotlin.io.path.readText
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -19,7 +20,26 @@ class ReportWriterTest {
         assertEquals(out.resolve("report.txt"), written.humanReport)
         assertTrue(written.reportJson.toFile().isFile)
         assertTrue(written.survivorsJson.toFile().isFile)
-        assertTrue(written.humanReport.toFile().isFile)
+        assertTrue(written.humanReport!!.toFile().isFile)
+    }
+
+    @Test
+    fun `humanReport = false suppresses report_txt and reports no path`(@TempDir tmp: Path) {
+        val written = ReportWriter.write(tmp, ReportFixture.report(), humanReport = false)
+
+        assertEquals(null, written.humanReport)
+        assertFalse(tmp.resolve("report.txt").toFile().exists(), "report.txt must not be written")
+        assertTrue(written.reportJson.toFile().isFile)
+        assertTrue(written.survivorsJson.toFile().isFile)
+    }
+
+    @Test
+    fun `humanReport = false removes a stale report_txt from a prior run`(@TempDir tmp: Path) {
+        ReportWriter.write(tmp, ReportFixture.report(), humanReport = true)
+        assertTrue(tmp.resolve("report.txt").toFile().isFile)
+
+        ReportWriter.write(tmp, ReportFixture.report(), humanReport = false)
+        assertFalse(tmp.resolve("report.txt").toFile().exists())
     }
 
     @Test
@@ -38,7 +58,7 @@ class ReportWriterTest {
             ReportJson.encodeSurvivors(SurvivorsProjection.from(persisted)) + "\n",
             written.survivorsJson.readText(),
         )
-        assertEquals(HumanReport.render(persisted), written.humanReport.readText())
+        assertEquals(HumanReport.render(persisted), written.humanReport!!.readText())
     }
 
     @Test

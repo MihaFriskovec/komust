@@ -62,6 +62,7 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
 
         val komustVersion = pluginVersion
         val komustDir = target.layout.buildDirectory.dir("komust")
+        val komustTmpDir = target.layout.buildDirectory.dir("tmp/komust")
 
         val engineDeps = target.configurations.dependencyScope("komustEngine") {
             it.description = "The komust-engine the mutationTest task forks."
@@ -108,8 +109,24 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
             task.consoleSurvivorsOnly.set(extension.output.consoleSurvivorsOnly)
             task.komustVersion.set(komustVersion)
             task.kotlinVersion.set(runCatching { target.getKotlinPluginVersion() }.getOrDefault("unknown"))
+            task.runSummaryFile.set(komustTmpDir.map { it.file("last-run-summary.txt") })
+            task.runMarkerFile.set(komustTmpDir.map { it.file("last-run.marker") })
             task.dependsOn(resolveScope)
         }
+
+        // Always-runs finalizer: re-shows the run summary when a re-run leaves
+        // `mutationTest` UP-TO-DATE, so the user is never left staring at
+        // silence (#62).
+        val mutationTestReport = target.tasks.register(
+            MutationTestReportTask.NAME,
+            MutationTestReportTask::class.java,
+        ) { task ->
+            task.group = GROUP
+            task.description = "Re-emits the last komust run summary when mutationTest is up to date."
+            task.summaryFile.set(komustTmpDir.map { it.file("last-run-summary.txt") })
+            task.markerFile.set(komustTmpDir.map { it.file("last-run.marker") })
+        }
+        mutationTest.configure { it.finalizedBy(mutationTestReport) }
 
         // A single set of `@Option`s on `mutationTest` drives scope resolution
         // too — feed its values across as plain value providers (no task dep).

@@ -127,8 +127,8 @@ komust {
         disable("increments")
     }
     output {
-        humanReport.set(true)            // human report rendered from the JSON (#5)
-        consoleSurvivorsOnly.set(true)   // token-dense survivor stream to console
+        humanReport.set(true)            // write build/komust/report.txt from the JSON (#5); false skips it
+        consoleSurvivorsOnly.set(true)   // also print the token-dense survivor stream to the console
     }
     workers.set(Runtime.getRuntime().availableProcessors())  // (#7)
     timeoutFactor.set(1.5)               // baseline-relative timeout (#7)

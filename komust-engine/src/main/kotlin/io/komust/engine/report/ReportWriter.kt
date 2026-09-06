@@ -2,6 +2,7 @@ package io.komust.engine.report
 
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteIfExists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
@@ -10,7 +11,8 @@ import kotlin.io.path.writeText
  *
  *  - `report.json`   — the lossless canonical record ([Report]),
  *  - `survivors.json` — the token-dense projection ([Survivors]),
- *  - `report.txt`     — the full human report ([HumanReport.render]).
+ *  - `report.txt`     — the full human report ([HumanReport.render]), written
+ *    only when `humanReport` is on (`komust { output { humanReport } }`, #62).
  *
  * `survivors.json` and `report.txt` are derived from the **re-read**
  * `report.json`, not from the in-memory [Report], so the three files provably
@@ -33,7 +35,7 @@ public object ReportWriter {
     public const val SURVIVORS_JSON: String = "survivors.json"
     public const val HUMAN_REPORT: String = "report.txt"
 
-    public fun write(outputDir: Path, report: Report): WrittenReport {
+    public fun write(outputDir: Path, report: Report, humanReport: Boolean = true): WrittenReport {
         outputDir.createDirectories()
 
         val reportPath = outputDir.resolve(REPORT_JSON)
@@ -47,17 +49,23 @@ public object ReportWriter {
         val survivorsPath = outputDir.resolve(SURVIVORS_JSON)
         survivorsPath.writeText(ReportJson.encodeSurvivors(survivors) + "\n")
 
-        val humanText = HumanReport.render(persisted)
         val humanPath = outputDir.resolve(HUMAN_REPORT)
-        humanPath.writeText(humanText)
+        if (humanReport) {
+            humanPath.writeText(HumanReport.render(persisted))
+        } else {
+            humanPath.deleteIfExists()
+        }
 
-        return WrittenReport(reportPath, survivorsPath, humanPath)
+        return WrittenReport(reportPath, survivorsPath, humanPath.takeIf { humanReport })
     }
 }
 
-/** Paths of the three files [ReportWriter.write] produced. */
+/**
+ * Paths of the files [ReportWriter.write] produced. [humanReport] is `null` when
+ * `komust { output { humanReport = false } }` suppressed `report.txt` (#62).
+ */
 public data class WrittenReport(
     val reportJson: Path,
     val survivorsJson: Path,
-    val humanReport: Path,
+    val humanReport: Path?,
 )

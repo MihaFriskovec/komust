@@ -59,6 +59,20 @@ class MutationTestSmokeTest {
         // `scale` is only loosely tested → at least one survivor.
         assertTrue(survivors.readText().contains("\"enclosingSymbol\": \"scale\""), survivors.readText())
 
+        // #62: the run summary + report paths reach the build console via lifecycle
+        // logging, and `consoleSurvivorsOnly` (set in the fixture DSL) streams the survivors.
+        assertTrue(run.output.contains("komust: mutation run complete:"), run.output)
+        assertTrue(run.output.contains("survived"), run.output)
+        assertTrue(run.output.contains("survivors.json"), run.output)
+        assertTrue(run.output.contains("Surviving mutants"), run.output)
+        assertTrue(run.output.contains("scale"), run.output)
+
+        // #62: a re-run with no input changes is UP-TO-DATE but still shows the summary.
+        val rerun = gradle(dir, "mutationTest", "--stacktrace")
+        assertEquals(TaskOutcome.UP_TO_DATE, rerun.task(":mutationTest")?.outcome, rerun.output)
+        assertTrue(rerun.output.contains("mutationTest is up to date"), rerun.output)
+        assertTrue(rerun.output.contains("survived"), rerun.output)
+
         // The ordinary compile is mutant-free; the dedicated one is not.
         val ordinary = dir.resolve("build/classes/kotlin/main/fixture/Calc.class")
         val mutation = dir.resolve("build/komust/classes/main/fixture/Calc.class")
@@ -110,6 +124,11 @@ class MutationTestSmokeTest {
             }
             kotlin { jvmToolchain(21) }
             tasks.test { useJUnitPlatform() }
+            komust {
+                output {
+                    consoleSurvivorsOnly.set(true)
+                }
+            }
             """.trimIndent(),
         )
 
