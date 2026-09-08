@@ -29,7 +29,7 @@ nothing that can rot on a version bump:
 
 ```kotlin
 plugins {
-    kotlin("jvm") version "2.2.0"
+    kotlin("jvm") version "2.4.0"
     id("io.komust")              // no version — resolved from ../
 }
 ```

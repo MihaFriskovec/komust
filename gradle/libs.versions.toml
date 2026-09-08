@@ -8,7 +8,7 @@
 # so a Kotlin bump is a deliberate, tested change confined to one file.
 # See docs/adr/0005-gradle-plugin-architecture.md.
 [versions]
-kotlin = "2.2.0"
+kotlin = "2.4.0"
 # JUnit Platform: the engine drives tests through the Platform Launcher API
 # directly (ADR-0005 §4), so the Platform version is pinned, not just Jupiter.
 # The JUnit BOM aligns Jupiter + Platform to one release train.
@@ -25,7 +25,7 @@ kotlinxSerialization = "1.9.0"
 # kotlin-compile-testing (Zac Sweers' K2-tracking fork). Drives an in-process K2
 # compile of fixture sources in `komust-compiler-plugin`'s tests, against the
 # exact pinned Kotlin above (it resolves the compiler off the test classpath).
-kctfork = "0.8.0"
+kctfork = "0.13.0"
 # JSON Schema validator (test-only). komust-engine's output-contract tests
 # validate the emitted report.json / survivors.json against the in-repo
 # `schema/*.schema.json` so the schema and the serialised shape cannot drift.

@@ -1,7 +1,7 @@
 plugins {
     // Pinned to the same Kotlin the komust compiler plugin is built against
     // (gradle/libs.versions.toml) — the K2 compiler-plugin ABI is version-specific.
-    kotlin("jvm") version "2.2.0"
+    kotlin("jvm") version "2.4.0"
 
     // Apply by id with NO version: the composite build in settings.gradle.kts
     // substitutes it from source, so a version string would be meaningless and

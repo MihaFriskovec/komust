@@ -11,6 +11,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
 import java.nio.file.Path
 
 /**
@@ -26,6 +27,7 @@ import java.nio.file.Path
  * [scopeMode] records `all` (whole project — `mutationTest`'s `applyToCompilation`
  * then omits the `scope` SubpluginOption entirely) or `scoped`.
  */
+@DisableCachingByDefault(because = "Resolves scope from the live git working tree; output is cheap to recompute and not a cache-worthy function of declared inputs")
 public abstract class KomustResolveScopeTask : DefaultTask() {
 
     @get:Input @get:Optional

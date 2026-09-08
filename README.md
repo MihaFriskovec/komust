@@ -45,7 +45,7 @@ pluginManagement {
 
 ```kotlin
 plugins {
-    kotlin("jvm") version "2.2.0"
+    kotlin("jvm") version "2.4.0"
     id("io.komust") version "0.1.0-SNAPSHOT"
 }
 ```
@@ -210,9 +210,9 @@ engine input contract.
 
 ## Requirements
 
-- Kotlin **2.2.0** (exact pin — the K2 compiler plugin API is unstable across versions)
+- Kotlin **2.4.0** (exact pin — the K2 compiler plugin API is unstable across versions)
 - JDK **21+**
-- Gradle **8.x**
+- Gradle **9.x**
 - JUnit Platform (JUnit 5) for test execution
 
 ## License
