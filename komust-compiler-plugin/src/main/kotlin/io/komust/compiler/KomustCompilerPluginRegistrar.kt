@@ -23,6 +23,8 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
  */
 public class KomustCompilerPluginRegistrar : CompilerPluginRegistrar() {
 
+    override val pluginId: String get() = "io.komust.compiler"
+
     override val supportsK2: Boolean get() = true
 
     override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {

@@ -73,10 +73,13 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
                 attrs.attribute(Category.CATEGORY_ATTRIBUTE, target.objects.named(Category::class.java, Category.LIBRARY))
             }
         }
-        val runtimeGuardDeps = target.configurations.dependencyScope("komustRuntime") {
+        // Not "komustRuntime[Classpath]": the mutation KotlinCompilation is named
+        // "komust" (MUTATION_COMPILATION_NAME), so the Kotlin plugin already owns
+        // the `komust*` compilation-derived configuration names (komustRuntimeClasspath, …).
+        val runtimeGuardDeps = target.configurations.dependencyScope("komustRuntimeGuard") {
             it.description = "io.komust.runtime — the woven guard, on every forked classpath."
         }
-        val runtimeGuardClasspath = target.configurations.resolvable("komustRuntimeClasspath") {
+        val runtimeGuardClasspath = target.configurations.resolvable("komustRuntimeGuardClasspath") {
             it.extendsFrom(runtimeGuardDeps.get())
             it.attributes { attrs ->
                 attrs.attribute(Usage.USAGE_ATTRIBUTE, target.objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
@@ -151,7 +154,7 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
                 // Same dependencies the ordinary main compile sees, plus the
                 // `io.komust.runtime` guard so `mutantActive(...)` resolves.
                 libraries.from(mainCompilation.compileDependencyFiles)
-                libraries.from(project.configurations.getByName("komustRuntimeClasspath"))
+                libraries.from(project.configurations.getByName("komustRuntimeGuardClasspath"))
                 destinationDirectory.set(classesDir)
                 dependsOn(resolveScope)
             }

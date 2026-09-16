@@ -48,8 +48,8 @@ class PluginDiscoveryTest {
         // classpath, where the catalog pins kotlin-compiler-embeddable to the
         // same `kotlin` version as the whole build.
         assertTrue(
-            KotlinCompilerVersion.VERSION.startsWith("2.2."),
-            "expected the catalog-pinned Kotlin 2.2.x, got ${KotlinCompilerVersion.VERSION}",
+            KotlinCompilerVersion.VERSION.startsWith("2.4."),
+            "expected the catalog-pinned Kotlin 2.4.x, got ${KotlinCompilerVersion.VERSION}",
         )
     }
 }

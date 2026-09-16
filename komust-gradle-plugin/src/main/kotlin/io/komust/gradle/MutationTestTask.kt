@@ -15,6 +15,7 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
 import org.gradle.process.ExecOperations
+import org.gradle.work.DisableCachingByDefault
 import javax.inject.Inject
 
 /**
@@ -32,6 +33,7 @@ import javax.inject.Inject
  *
  * Not wired into `check` — a normal build and CI are unaffected until opted in.
  */
+@DisableCachingByDefault(because = "Forks a dedicated engine JVM that runs the full mutation analysis; the engine keeps its own cross-run mutant-result cache")
 public abstract class MutationTestTask : DefaultTask() {
 
     // --- Per-run scope + overrides (ADR-0005 §5) ---------------------------

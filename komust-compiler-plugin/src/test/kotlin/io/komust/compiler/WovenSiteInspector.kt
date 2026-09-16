@@ -28,6 +28,8 @@ class WovenSiteOffsets {
 
 class WovenSiteInspectorRegistrar(private val sink: WovenSiteOffsets) : CompilerPluginRegistrar() {
 
+    override val pluginId: String get() = "io.komust.compiler.test.woven-site-inspector"
+
     override val supportsK2: Boolean get() = true
 
     override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
