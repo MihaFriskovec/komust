@@ -38,9 +38,21 @@ class OperatorConfigTest {
     }
 
     @Test fun `enable adds an operator on top of the default tier`() {
-        // No experimental operators ship yet, but enable of a known slug is a no-op-safe add.
-        val config = OperatorConfig.resolve(disabledSlugs = listOf("arithmetic"), enabledSlugs = listOf("arithmetic"))
-        assertTrue(MutationOperatorId.ARITHMETIC in config, "enable wins over disable")
+        val config = OperatorConfig.resolve(
+            disabledSlugs = emptyList(),
+            enabledSlugs = listOf("elvis-default"),
+        )
+        assertTrue(MutationOperatorId.ELVIS_DEFAULT in config)
+        assertEquals(MutationOperatorId.defaultTier + MutationOperatorId.ELVIS_DEFAULT, config.enabled)
+    }
+
+    @Test fun `experimental tier adds every experimental operator`() {
+        val config = OperatorConfig.resolve(
+            disabledSlugs = emptyList(),
+            enabledSlugs = emptyList(),
+            experimentalTier = true,
+        )
+        assertEquals(MutationOperatorId.entries.toSet(), config.enabled)
     }
 
     // --- effect on a compile ---------------------------------------
