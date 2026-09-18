@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
@@ -63,6 +64,7 @@ import org.jetbrains.kotlin.ir.types.isShort
 import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.classId
+import org.jetbrains.kotlin.ir.util.constructors
 import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.hasAnnotation
@@ -322,6 +324,7 @@ internal object KotlinIrCompat {
                 addAll(relationalCandidates(visited, siteRawArgs))
                 addAll(equalityCandidates(visited, siteRawArgs))
                 addAll(booleanInversionCallCandidates(visited))
+                addAll(invertNegativeCandidates(visited, siteRawArgs))
                 addAll(incrementCandidates(visited))
                 addAll(voidCallCandidates(visited))
             }
@@ -332,7 +335,8 @@ internal object KotlinIrCompat {
             call.symbol == irBuiltIns.eqeqSymbol ||
                 call.symbol == irBuiltIns.booleanNotSymbol ||
                 call.origin in RELATIONAL_ORIGINS ||
-                call.symbol.owner.name.asString() in ARITH_SWAP
+                call.symbol.owner.name.asString() in ARITH_SWAP ||
+                call.symbol.owner.name.asString() == "unaryMinus"
 
         override fun visitConst(expression: IrConst): IrExpression {
             val visited = super.visitConst(expression)
@@ -364,6 +368,17 @@ internal object KotlinIrCompat {
             return visited
         }
 
+        override fun visitThrow(expression: IrThrow): IrExpression {
+            val visited = super.visitThrow(expression)
+            if (visited !is IrThrow || inSkippedDeclaration()) return visited
+            val thrown = visited.value as? IrConstructorCall ?: return visited
+            val candidates = exceptionTypeSwapCandidates(thrown)
+            if (candidates.isNotEmpty()) {
+                visited.value = weaveSite(thrown, irBuiltIns.throwableType, candidates)
+            }
+            return visited
+        }
+
         override fun visitWhen(expression: IrWhen): IrExpression {
             // Skip-list: an exhaustive `when` with no `else` desugars to a final
             // branch that throws `NoWhenBranchMatchedException`; mutating a
@@ -380,6 +395,26 @@ internal object KotlinIrCompat {
 
             val candidates = booleanLogicCandidates(visited) + ifNegateCandidates(visited)
             return weaveSite(visited, visited.type, candidates)
+        }
+
+        // --- Operators: Elvis default (experimental) ----------------
+
+        override fun visitBlock(expression: IrBlock): IrExpression {
+            val visited = super.visitBlock(expression)
+            if (visited !is IrBlock || inSkippedDeclaration()) return visited
+            return weaveSite(visited, visited.type, elvisDefaultCandidates(visited))
+        }
+
+        private fun elvisDefaultCandidates(expression: IrBlock): List<Candidate> {
+            if (MutationOperatorId.ELVIS_DEFAULT !in config) return emptyList()
+            if (expression.origin != IrStatementOrigin.ELVIS) return emptyList()
+            val elvisWhen = expression.statements.lastOrNull() as? IrWhen ?: return emptyList()
+            val default = elvisWhen.branches.firstOrNull()?.result ?: return emptyList()
+            return listOf(
+                Candidate(MutationOperatorId.ELVIS_DEFAULT, "ELVIS_TO_DEFAULT", "a ?: b → b") {
+                    default.deepCopy()
+                },
+            )
         }
 
         // --- Operators: arithmetic ------------------------------------
@@ -518,6 +553,67 @@ internal object KotlinIrCompat {
                 )
             }
             return emptyList()
+        }
+
+        // --- Operators: invert negatives (experimental) ------------
+
+        private fun invertNegativeCandidates(call: IrCall, rawArgs: List<IrExpression?>?): List<Candidate> {
+            if (MutationOperatorId.INVERT_NEGATIVES !in config) return emptyList()
+            val callee = call.symbol.owner
+            if (callee.name.asString() != "unaryMinus") return emptyList()
+            val receiverClassId = callee.parentClassOrNull?.classId ?: return emptyList()
+            if (receiverClassId.packageFqName != KOTLIN_PACKAGE) return emptyList()
+            if (receiverClassId.shortClassName.asString() !in NUMERIC_PRIMITIVES) return emptyList()
+            val dispatchIndex = callee.parameters.indexOfFirst { it.kind == IrParameterKind.DispatchReceiver }
+            if (dispatchIndex < 0 || call.arguments.getOrNull(dispatchIndex) == null) return emptyList()
+            return listOf(
+                Candidate(MutationOperatorId.INVERT_NEGATIVES, "NEGATE_DROP", "-x → x") {
+                    call.rawArg(dispatchIndex, rawArgs)
+                },
+            )
+        }
+
+        // --- Operators: exception-type swap (experimental) ---------
+
+        private fun exceptionTypeSwapCandidates(call: IrConstructorCall): List<Candidate> {
+            if (MutationOperatorId.EXCEPTION_TYPE_SWAP !in config) return emptyList()
+            val original = call.symbol.owner
+            val originalFqName = original.parentClassOrNull?.fqNameWhenAvailable?.asString() ?: return emptyList()
+            val (replacementFqName, token, description) = when (originalFqName) {
+                "java.lang.IllegalArgumentException" -> Triple(
+                    "java.lang.IllegalStateException",
+                    "EXCEPTION_IAE_TO_ISE",
+                    "IllegalArgumentException → IllegalStateException",
+                )
+                "java.lang.IllegalStateException" -> Triple(
+                    "java.lang.IllegalArgumentException",
+                    "EXCEPTION_ISE_TO_IAE",
+                    "IllegalStateException → IllegalArgumentException",
+                )
+                else -> return emptyList()
+            }
+            val originalParameterTypes = original.parameters
+                .filter { it.kind == IrParameterKind.Regular }
+                .map { it.type.classFqName }
+            val replacementClass = pluginContext
+                .referenceClass(ClassId.topLevel(FqName(replacementFqName)))
+                ?.owner
+                ?: return emptyList()
+            val replacement = replacementClass.constructors.singleOrNull { constructor ->
+                constructor.parameters
+                    .filter { it.kind == IrParameterKind.Regular }
+                    .map { it.type.classFqName } == originalParameterTypes
+            } ?: return emptyList()
+
+            return listOf(
+                Candidate(MutationOperatorId.EXCEPTION_TYPE_SWAP, token, description) {
+                    irCall(replacement.symbol).apply {
+                        call.arguments.forEachIndexed { index, argument ->
+                            arguments[index] = argument?.deepCopy()
+                        }
+                    }
+                },
+            )
         }
 
         /**

@@ -22,6 +22,7 @@ class KomustCommandLineProcessorTest {
         val names = KomustCommandLineProcessor().pluginOptions.map { it.optionName }.toSet()
         assertTrue("disabledOperators" in names, "expected disabledOperators option; got $names")
         assertTrue("enabledOperators" in names, "expected enabledOperators option; got $names")
+        assertTrue("experimentalTier" in names, "expected experimentalTier option; got $names")
         assertTrue("scope" in names, "expected scope option (#30); got $names")
     }
 

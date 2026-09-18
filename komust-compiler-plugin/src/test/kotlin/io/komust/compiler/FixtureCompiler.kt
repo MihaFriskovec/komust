@@ -41,6 +41,7 @@ object FixtureCompiler {
         extraRegistrars: List<CompilerPluginRegistrar> = emptyList(),
         disabledOperators: List<String> = emptyList(),
         enabledOperators: List<String> = emptyList(),
+        experimentalTier: Boolean = false,
         extraFiles: List<Pair<String, String>> = emptyList(),
         scopeJson: String? = null,
         scopeOptionValue: String? = null,
@@ -71,6 +72,9 @@ object FixtureCompiler {
                     }
                     enabledOperators.forEach {
                         add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "enabledOperators", it))
+                    }
+                    if (experimentalTier) {
+                        add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "experimentalTier", "true"))
                     }
                     if (scopeValue != null) {
                         add(PluginOption(KomustCommandLineProcessor.PLUGIN_ID, "scope", scopeValue))

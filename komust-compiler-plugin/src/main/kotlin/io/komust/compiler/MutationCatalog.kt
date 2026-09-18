@@ -34,6 +34,9 @@ internal enum class MutationOperatorId(
     INCREMENT("increment", Tier.DEFAULT, spikeGated = true),
     EMPTY_RETURN("empty-return", Tier.DEFAULT, spikeGated = true),
     VOID_CALL("void-call", Tier.DEFAULT, spikeGated = true),
+    ELVIS_DEFAULT("elvis-default", Tier.EXPERIMENTAL),
+    INVERT_NEGATIVES("invert-negatives", Tier.EXPERIMENTAL),
+    EXCEPTION_TYPE_SWAP("exception-type-swap", Tier.EXPERIMENTAL),
     ;
 
     internal companion object {
