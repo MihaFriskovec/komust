@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — Public Release contract rehearsal</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17221d;
+      --muted: #607069;
+      --paper: #f6f7f3;
+      --panel: #ffffff;
+      --line: #d9dfda;
+      --accent: #176b52;
+      --accent-soft: #e2f1eb;
+      --warn: #8b5b06;
+      --warn-soft: #fff3d2;
+      --bad: #9f3434;
+      --bad-soft: #fae8e5;
+      --shadow: 0 8px 28px rgba(30, 55, 43, .08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, select { font: inherit; }
+    button { cursor: pointer; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+    .shell { width: min(1480px, calc(100% - 32px)); margin: 28px auto 64px; }
+    .eyebrow { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 6px 0 8px; font-size: clamp(30px, 4vw, 50px); line-height: 1.05; letter-spacing: -.035em; }
+    h2 { margin: 0 0 14px; font-size: 20px; }
+    h3 { margin: 0 0 10px; font-size: 15px; }
+    p { margin: 0 0 12px; }
+    .lede { max-width: 980px; color: var(--muted); font-size: 17px; }
+    .notice { margin-top: 18px; padding: 12px 14px; border: 1px solid #e2c47f; border-radius: 10px; background: var(--warn-soft); }
+
+    .top-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 22px 0; }
+    .top-controls label { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+    select, .button {
+      border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink);
+      padding: 9px 12px;
+    }
+    .button:hover { border-color: var(--accent); }
+    .button.primary { border-color: var(--accent); background: var(--accent); color: white; }
+    .button.small { padding: 6px 9px; font-size: 13px; }
+    .button:disabled { cursor: not-allowed; opacity: .42; }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr); gap: 18px; align-items: start; }
+    .stack { display: grid; gap: 18px; }
+    .card { border: 1px solid var(--line); border-radius: 13px; background: var(--panel); box-shadow: var(--shadow); padding: 18px; }
+    .card.flush { padding: 0; overflow: hidden; }
+    .card-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 18px 18px 0; }
+    .muted { color: var(--muted); }
+
+    .status-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; background: #edf0ed; font-size: 12px; font-weight: 700; }
+    .pill.good { background: var(--accent-soft); color: var(--accent); }
+    .pill.warn { background: var(--warn-soft); color: var(--warn); }
+    .pill.bad { background: var(--bad-soft); color: var(--bad); }
+
+    .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--line); }
+    .fact { min-width: 0; padding: 11px; background: var(--panel); }
+    .fact dt { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .fact dd { margin: 4px 0 0; overflow-wrap: anywhere; font-weight: 650; }
+
+    .timeline { display: grid; grid-template-columns: repeat(9, minmax(56px, 1fr)); gap: 4px; margin: 14px 0 2px; }
+    .stage { min-width: 0; border-top: 4px solid var(--line); padding-top: 7px; color: var(--muted); font-size: 10px; line-height: 1.25; }
+    .stage.done { border-color: var(--accent); color: var(--accent); }
+    .stage.current { border-color: var(--warn); color: var(--ink); font-weight: 800; }
+    .stage.blocked { border-color: var(--bad); color: var(--bad); }
+
+    .command { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 9px; background: #15251f; color: #dff7ed; padding: 14px; font-size: 13px; }
+    .secret-list, .artifact-list, .event-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+    .secret-list li, .artifact-list li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eef0ee; padding-bottom: 7px; }
+    .secret-list li:last-child, .artifact-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+    .secret-list code { color: var(--bad); font-size: 12px; }
+    .artifact-list span:last-child { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+
+    .action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .action-grid button { min-height: 44px; text-align: left; }
+    .action-grid button[data-risk="irreversible"] { border-color: #d6aa4d; }
+    .rejection { min-height: 24px; margin-top: 10px; color: var(--bad); font-weight: 700; }
+
+    .tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 0 14px; }
+    .tab { flex: 0 0 auto; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); padding: 13px 10px 10px; }
+    .tab.active { border-color: var(--accent); color: var(--ink); font-weight: 800; }
+    .scenario { padding: 18px; }
+    .step-list { display: grid; gap: 9px; margin-top: 14px; }
+    .step { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 9px; padding: 9px; }
+    .step.done { background: var(--accent-soft); border-color: #b9dacc; }
+    .step.current { border-color: var(--accent); }
+    .step-index { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #edf0ed; font-size: 12px; font-weight: 800; }
+    .step.done .step-index { background: var(--accent); color: white; }
+    .step-copy strong, .step-copy span { display: block; }
+    .step-copy span { color: var(--muted); font-size: 12px; }
+
+    .event-list { max-height: 310px; overflow: auto; }
+    .event-list li { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; }
+    .event-list li.accepted { border-color: var(--accent); }
+    .event-list li.rejected { border-color: var(--bad); }
+    .event-list small { display: block; color: var(--muted); }
+
+    details { border-top: 1px solid var(--line); padding: 14px 18px; }
+    summary { cursor: pointer; font-weight: 800; }
+    .contract-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    .contract-table th, .contract-table td { border-top: 1px solid var(--line); padding: 9px; text-align: left; vertical-align: top; }
+    .contract-table th { color: var(--muted); }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      .shell { width: min(100% - 18px, 1480px); margin-top: 16px; }
+      .facts, .action-grid { grid-template-columns: 1fr; }
+      .timeline { grid-template-columns: repeat(3, 1fr); }
+      .step { grid-template-columns: 28px 1fr; }
+      .step button { grid-column: 2; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="eyebrow">Throwaway prototype · issue 68</div>
+    <h1>Rehearse the Public Release contract</h1>
+    <p class="lede">Question: can one checkpointed local command carry an already-qualified candidate through Central, the Plugin Portal, public verification, the tag, and an immutable GitHub Release—without losing artifact identity, leaking credentials, replaying an irreversible step, or guessing after an ambiguous response?</p>
+    <div class="notice"><strong>Planning instrument, not release tooling.</strong> No registry, credential, tag, or GitHub operation is performed by this file. The pure state machine below is the proposed contract; the page exists only to push it through awkward cases.</div>
+
+    <div class="top-controls">
+      <label>Candidate
+        <select id="candidateSelect">
+          <option value="alpha">0.1.0-alpha.1 · first alpha</option>
+          <option value="patch">0.1.1 · routine patch</option>
+        </select>
+      </label>
+      <label>Mode
+        <select id="modeSelect">
+          <option value="live">Live contract rehearsal</option>
+          <option value="dry-run">Dry run (no secret reads or writes)</option>
+        </select>
+      </label>
+      <button class="button" id="resetButton">Reset candidate</button>
+      <button class="button" id="copyButton">Copy checkpoint JSON</button>
+    </div>
+
+    <div class="layout">
+      <section class="stack">
+        <article class="card">
+          <div class="eyebrow">Current state</div>
+          <div class="status-row" id="statusRow"></div>
+          <div class="timeline" id="timeline"></div>
+          <dl class="facts" id="facts"></dl>
+          <p class="rejection" id="rejection" aria-live="polite"></p>
+        </article>
+
+        <article class="card">
+          <h2>Free play</h2>
+          <p class="muted">Every action stays visible. Illegal actions are rejected without changing the checkpoint.</p>
+          <div class="action-grid" id="actions"></div>
+        </article>
+
+        <article class="card flush">
+          <div class="card-head">
+            <div>
+              <div class="eyebrow">Guided walkthroughs</div>
+              <h2>Cases that break hand-wavy release plans</h2>
+            </div>
+          </div>
+          <div class="tabs" id="tabs" role="tablist"></div>
+          <div class="scenario" id="scenario"></div>
+        </article>
+
+        <article class="card flush">
+          <div class="card-head"><div><div class="eyebrow">Contract</div><h2>Proposed command surface</h2></div></div>
+          <details open>
+            <summary>Invariants enforced on every invocation</summary>
+            <ul>
+              <li>The explicit checkpoint path is mandatory; it is atomically rewritten after one successful transition.</li>
+              <li>The clean checkout, fixed version, commit, manifest digest, SBOM digest, staged JAR/POM bytes, coordinates, and checkpoint must agree.</li>
+              <li>Ambiguous responses stop the command. Only <code>reconcile</code> may discover whether the remote transition happened.</li>
+              <li>No secret value is written to the checkpoint, arguments, files, logs, Gradle properties, keyring, or shell history.</li>
+              <li>After any public coordinate appears, the version is consumed. A definitive failure can only finalize an Incomplete publication.</li>
+              <li><code>--dry-run</code> refuses secret-bearing environment variables and remote writes; it produces a simulated checkpoint ending in Dry-run complete.</li>
+            </ul>
+          </details>
+          <details>
+            <summary>Commands and their boundaries</summary>
+            <table class="contract-table">
+              <thead><tr><th>Command</th><th>Purpose</th><th>Secrets allowed</th></tr></thead>
+              <tbody>
+                <tr><td><code>./release start</code></td><td>Import protected-CI artifacts and bind the qualified commit/version.</td><td>None</td></tr>
+                <tr><td><code>./release central upload</code></td><td>Verify staged bytes, sign in memory, construct and upload the USER_MANAGED bundle.</td><td>Central token + signing key/passphrase</td></tr>
+                <tr><td><code>./release central validate</code></td><td>Poll/inspect the recorded deployment; record pass or failure.</td><td>Central token only while private</td></tr>
+                <tr><td><code>./release central promote</code></td><td>Typed approval, promote the exact validated deployment, then observe public coordinates.</td><td>Central token</td></tr>
+                <tr><td><code>./release portal submit</code></td><td>Typed approval, submit the qualified plugin only after Central public verification.</td><td>Portal key/secret</td></tr>
+                <tr><td><code>./release verify</code></td><td>Resolve from empty caches, validate registries and reports, create verification evidence.</td><td>None</td></tr>
+                <tr><td><code>./release finalize</code></td><td>Build checksums/payload, create and verify tag, publish immutable GitHub Release.</td><td>Existing GitHub CLI auth</td></tr>
+                <tr><td><code>./release reconcile</code></td><td>Read authoritative state after any ambiguous response; never repeats a write.</td><td>Only the affected private registry credential</td></tr>
+                <tr><td><code>./release incomplete</code></td><td>Publish the permanent warning record for a consumed failed version.</td><td>Existing GitHub CLI auth</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </article>
+      </section>
+
+      <aside class="stack">
+        <article class="card">
+          <h2>Next exact command</h2>
+          <pre class="command" id="command"></pre>
+          <p class="muted" id="commandNote" style="margin-top:10px"></p>
+        </article>
+
+        <article class="card">
+          <h2>Secret boundary</h2>
+          <ul class="secret-list" id="secrets"></ul>
+        </article>
+
+        <article class="card">
+          <h2>Artifact handoff</h2>
+          <ul class="artifact-list" id="artifacts"></ul>
+        </article>
+
+        <article class="card">
+          <h2>Recorded resume inputs</h2>
+          <ul class="artifact-list" id="resumeInputs"></ul>
+        </article>
+
+        <article class="card">
+          <h2>Event log</h2>
+          <ul class="event-list" id="events"></ul>
+        </article>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    // Portable logic module. It has no DOM dependency and can be lifted out of this page.
+    const ReleaseContract = (() => {
+      const stages = [
+        "Qualified Candidate", "Central Uploaded", "Central Validated", "Central Published",
+        "Plugin Portal Submitted", "Plugin Portal Public", "Publication Verified", "Finalizing", "Public Release"
+      ];
+
+      const candidates = {
+        alpha: { version: "0.1.0-alpha.1", commit: "8f31c77", kind: "first alpha", qualificationRun: "CI-1842" },
+        patch: { version: "0.1.1", commit: "b721d4a", kind: "routine patch", qualificationRun: "CI-2310" }
+      };
+
+      const clone = value => JSON.parse(JSON.stringify(value));
+      const digest = seed => `sha256:${seed.padEnd(12, "0").slice(0, 12)}…`;
+      const checkpointPath = version => `.release/${version}/checkpoint.json`;
+
+      function initial(candidateKey = "alpha", mode = "live") {
+        const candidate = clone(candidates[candidateKey]);
+        return {
+          schemaVersion: 1,
+          mode,
+          stage: "Qualified Candidate",
+          outcome: "in-progress",
+          candidate,
+          checkpoint: { path: checkpointPath(candidate.version), revision: 1, lastTransition: "start", write: "atomic" },
+          artifacts: {
+            "qualification-manifest.json": digest("manifest68"),
+            [`komust-${candidate.version}.cdx.json`]: digest("sbom68"),
+            "qualified-publications/": "manifest-bound JARs and POMs",
+            "central-bundle.zip": "not built",
+            "publication-verification.json": "not built",
+            "SHA256SUMS": "not built"
+          },
+          central: { deploymentId: null, state: "not started", publicVerified: false, attempts: 0 },
+          portal: { submissionId: null, state: "not started" },
+          github: { tag: null, release: "not started" },
+          pending: null,
+          failure: null,
+          versionConsumed: false,
+          credentials: { centralToken: "generation CT-new", signingKey: "fingerprint A91F…7C2E", portalKey: "generation PP-2026" },
+          approvals: [],
+          eventLog: [{ accepted: true, action: "start", note: `Imported protected qualification ${candidate.qualificationRun}.`, revision: 1 }],
+          lastRejection: ""
+        };
+      }
+
+      function atStage(candidateKey, mode, stage, extras = {}) {
+        let state = initial(candidateKey, mode);
+        const index = stages.indexOf(stage);
+        state.stage = stage;
+        state.checkpoint.revision = index + 1;
+        if (index >= 1) {
+          state.central = { deploymentId: "dep-7B29", state: index >= 3 ? "published" : index >= 2 ? "validated" : "uploaded", publicVerified: index >= 3, attempts: 1 };
+          state.artifacts["central-bundle.zip"] = digest("bundle68");
+        }
+        if (index >= 3) state.versionConsumed = true;
+        if (index >= 4) state.portal = { submissionId: "portal-0.1", state: index >= 5 ? "public" : "submitted" };
+        if (index >= 7) state.github = { tag: `v${state.candidate.version}`, release: "draft payload prepared" };
+        return Object.assign(state, clone(extras));
+      }
+
+      const labels = {
+        CENTRAL_UPLOAD: "Upload Central bundle",
+        CENTRAL_UPLOAD_AMBIGUOUS: "Upload response is ambiguous",
+        RECONCILE_UPLOAD_FOUND: "Reconcile: deployment exists",
+        RECONCILE_UPLOAD_ABSENT: "Reconcile: no deployment",
+        CENTRAL_VALIDATION_PASSES: "Central validation passes",
+        CENTRAL_VALIDATION_PENDING: "Central validation remains pending",
+        OBSERVE_CENTRAL_VALIDATED: "Observe Central validation pass",
+        CENTRAL_VALIDATION_FAILS: "Central validation fails",
+        ABORT_CENTRAL: "Abort private deployment",
+        CENTRAL_PROMOTE: "Approve Central promotion",
+        CENTRAL_PUBLIC_OBSERVED: "Observe all Central coordinates",
+        PORTAL_SUBMIT: "Submit to Plugin Portal",
+        PORTAL_SUBMIT_AMBIGUOUS: "Portal response is ambiguous",
+        RECONCILE_PORTAL_FOUND: "Reconcile: Portal submission exists",
+        PORTAL_PUBLIC: "Observe Portal publication",
+        PORTAL_REJECTS: "Portal definitively rejects",
+        VERIFY_PASSES: "Public consumer passes",
+        VERIFY_TRANSIENT_FAILS: "Verification fails transiently",
+        RETRY_VERIFY_PASSES: "Retry verified observation",
+        VERIFY_SUBSTANTIVE_FAILS: "Verification proves mismatch",
+        PREPARE_FINAL: "Prepare evidence and tag",
+        FINALIZE_SUCCESS: "Publish tag and immutable release",
+        FINALIZE_AMBIGUOUS: "GitHub result is ambiguous",
+        RECONCILE_GITHUB_COMPLETE: "Reconcile: GitHub is complete",
+        FINALIZE_WRONG_IMMUTABLE: "Observe wrong immutable finalization",
+        ROTATE_CENTRAL_TOKEN: "Rotate Central token",
+        ROTATE_PORTAL_KEY: "Rotate Portal key",
+        MARK_INCOMPLETE: "Finalize incomplete record",
+        START_CORRECTIVE: "Qualify corrective version"
+      };
+
+      function accept(state, action, note, mutate) {
+        const next = clone(state);
+        mutate(next);
+        next.checkpoint.revision += 1;
+        next.checkpoint.lastTransition = action;
+        next.lastRejection = "";
+        next.eventLog.unshift({ accepted: true, action: labels[action] || action, note, revision: next.checkpoint.revision });
+        return next;
+      }
+
+      function reject(state, action, reason) {
+        const next = clone(state);
+        next.lastRejection = reason;
+        next.eventLog.unshift({ accepted: false, action: labels[action] || action, note: reason, revision: next.checkpoint.revision });
+        return next;
+      }
+
+      function reduce(state, action) {
+        if (state.outcome !== "in-progress" && action !== "START_CORRECTIVE") {
+          return reject(state, action, "Terminal records are immutable. Qualify a new version instead.");
+        }
+
+        switch (action) {
+          case "CENTRAL_UPLOAD":
+            if (state.stage !== "Qualified Candidate" || state.pending || state.failure) return reject(state, action, "Upload requires a clean Qualified Candidate checkpoint.");
+            return accept(state, action, "The manifest-bound files were signed in memory and uploaded once.", n => {
+              n.stage = "Central Uploaded"; n.central = { deploymentId: n.mode === "dry-run" ? "dry-dep-001" : "dep-7B29", state: "uploaded", publicVerified: false, attempts: n.central.attempts + 1 };
+              n.artifacts["central-bundle.zip"] = digest("bundle68");
+            });
+          case "CENTRAL_UPLOAD_AMBIGUOUS":
+            if (state.stage !== "Qualified Candidate" || state.pending || state.failure) return reject(state, action, "Only a fresh upload can have this ambiguous outcome.");
+            return accept(state, action, "No retry is allowed until Central is reconciled.", n => { n.pending = { surface: "Central upload", kind: "ambiguous write", recordedId: "request-91A", next: "reconcile" }; });
+          case "RECONCILE_UPLOAD_FOUND":
+            if (state.pending?.surface !== "Central upload") return reject(state, action, "There is no ambiguous Central upload to reconcile.");
+            return accept(state, action, "Authoritative Central state shows the original upload succeeded.", n => {
+              n.pending = null; n.stage = "Central Uploaded"; n.central = { deploymentId: "dep-7B29", state: "uploaded", publicVerified: false, attempts: n.central.attempts + 1 };
+              n.artifacts["central-bundle.zip"] = digest("bundle68");
+            });
+          case "RECONCILE_UPLOAD_ABSENT":
+            if (state.pending?.surface !== "Central upload") return reject(state, action, "There is no ambiguous Central upload to reconcile.");
+            return accept(state, action, "Central proves no deployment exists; a fresh upload is now safe.", n => { n.pending = null; n.central.state = "not started"; });
+          case "CENTRAL_VALIDATION_PASSES":
+            if (state.stage !== "Central Uploaded" || state.pending || state.failure) return reject(state, action, "Validation can pass only for the recorded uploaded deployment.");
+            return accept(state, action, "The exact deployment validated and is ready for typed promotion approval.", n => { n.stage = "Central Validated"; n.central.state = "validated"; });
+          case "CENTRAL_VALIDATION_PENDING":
+            if (state.stage !== "Central Uploaded" || state.pending || state.failure) return reject(state, action, "Only the recorded private deployment can remain under validation.");
+            return accept(state, action, "Elapsed time does not imply failure; keep the deployment ID and observe the same attempt.", n => { n.pending = { surface: "Central validation", kind: "asynchronous validation", recordedId: n.central.deploymentId, next: "status/reconcile" }; n.central.state = "validating"; });
+          case "OBSERVE_CENTRAL_VALIDATED":
+            if (state.pending?.surface !== "Central validation") return reject(state, action, "No Central validation is pending.");
+            return accept(state, action, "The recorded deployment validated without another upload.", n => { n.pending = null; n.stage = "Central Validated"; n.central.state = "validated"; });
+          case "CENTRAL_VALIDATION_FAILS":
+            if (state.stage !== "Central Uploaded" || state.pending || state.failure) return reject(state, action, "Validation failure applies only to an uploaded private deployment.");
+            return accept(state, action, "Failure is private: abort this deployment; the version is not consumed.", n => { n.failure = { kind: "pre-public validation", reason: "Central rejected bundle metadata", recover: "abort private deployment" }; n.central.state = "validation failed"; });
+          case "ABORT_CENTRAL":
+            if (state.failure?.kind !== "pre-public validation" || state.versionConsumed) return reject(state, action, "Only a failed, still-private deployment can be aborted for reuse.");
+            return accept(state, action, "The private deployment was abandoned. This exact candidate may retry; changed bytes require requalification.", n => {
+              n.stage = "Qualified Candidate"; n.failure = null; n.central = { deploymentId: null, state: "aborted", publicVerified: false, attempts: n.central.attempts };
+            });
+          case "CENTRAL_PROMOTE":
+            if (state.stage !== "Central Validated" || state.pending) return reject(state, action, "Promotion requires the recorded validated deployment and explicit approval.");
+            return accept(state, action, "Promotion was issued once; public visibility must be observed before Portal submission.", n => {
+              n.pending = { surface: "Central promotion", kind: "publication propagation", recordedId: n.central.deploymentId, next: "reconcile/observe" };
+              n.approvals.push(`Promote ${n.central.deploymentId} for ${n.candidate.version}`); n.central.state = "promoting";
+            });
+          case "CENTRAL_PUBLIC_OBSERVED":
+            if (state.pending?.surface !== "Central promotion") return reject(state, action, "Central promotion must be pending before public coordinates can be accepted.");
+            return accept(state, action, "All expected Central files resolve and match the candidate hashes.", n => {
+              n.pending = null; n.stage = "Central Published"; n.central.state = "published"; n.central.publicVerified = true; n.versionConsumed = true;
+            });
+          case "PORTAL_SUBMIT":
+            if (state.stage !== "Central Published" || state.pending) return reject(state, action, "Portal submission waits for verified public Central coordinates.");
+            return accept(state, action, "The qualified plugin publication was submitted with a separate credential scope.", n => {
+              n.stage = "Plugin Portal Submitted"; n.portal = { submissionId: n.mode === "dry-run" ? "dry-portal-001" : "portal-0.1", state: "review pending" };
+              n.pending = { surface: "Plugin Portal review", kind: "asynchronous review", recordedId: n.portal.submissionId, next: "status/reconcile" };
+              n.approvals.push(`Submit ${n.candidate.version} as io.komust`);
+            });
+          case "PORTAL_SUBMIT_AMBIGUOUS":
+            if (state.stage !== "Central Published" || state.pending) return reject(state, action, "Only a first Portal submission can have this ambiguous outcome.");
+            return accept(state, action, "Do not resubmit until the public marker and publisher history are reconciled.", n => { n.pending = { surface: "Plugin Portal submission", kind: "ambiguous write", recordedId: "request-PP42", next: "reconcile" }; });
+          case "RECONCILE_PORTAL_FOUND":
+            if (state.pending?.surface !== "Plugin Portal submission") return reject(state, action, "There is no ambiguous Portal submission to reconcile.");
+            return accept(state, action, "Portal history contains the exact original version; review remains pending.", n => {
+              n.stage = "Plugin Portal Submitted"; n.portal = { submissionId: "portal-0.1", state: "review pending" };
+              n.pending = { surface: "Plugin Portal review", kind: "asynchronous review", recordedId: n.portal.submissionId, next: "status/reconcile" };
+            });
+          case "PORTAL_PUBLIC":
+            if (state.stage !== "Plugin Portal Submitted" || state.pending?.surface !== "Plugin Portal review") return reject(state, action, "A recorded Portal submission must be under review.");
+            return accept(state, action, "The exact marker and implementation publication resolve publicly.", n => { n.pending = null; n.stage = "Plugin Portal Public"; n.portal.state = "public"; });
+          case "PORTAL_REJECTS":
+            if (state.stage !== "Plugin Portal Submitted" || !state.versionConsumed) return reject(state, action, "Definitive rejection matters here only after Central consumed the version.");
+            return accept(state, action, "Central is already public, so Portal rejection permanently makes this an Incomplete publication.", n => {
+              n.pending = null; n.failure = { kind: "post-public definitive failure", reason: "Plugin Portal rejected the exact submission", recover: "finalize incomplete record, then qualify next version" };
+              n.stage = "Incomplete publication"; n.outcome = "incomplete-publication"; n.portal.state = "rejected";
+            });
+          case "VERIFY_PASSES":
+            if (state.stage !== "Plugin Portal Public" || state.pending) return reject(state, action, "Cross-registry verification requires both registries public and no unresolved observation.");
+            return accept(state, action, "The empty-cache consumer and all metadata/hash checks passed.", n => {
+              n.stage = "Publication Verified"; n.artifacts["publication-verification.json"] = digest("verify68");
+            });
+          case "VERIFY_TRANSIENT_FAILS":
+            if (state.stage !== "Plugin Portal Public" || state.pending) return reject(state, action, "A transient observation can be recorded only during public verification.");
+            return accept(state, action, "The cause is classified as observational/infrastructure; artifacts remain unchanged.", n => { n.pending = { surface: "Publication verification", kind: "transient observation", recordedId: "verify-attempt-1", next: "retry observation" }; });
+          case "RETRY_VERIFY_PASSES":
+            if (state.pending?.surface !== "Publication verification") return reject(state, action, "No transient verification observation is pending.");
+            return accept(state, action, "The same public artifacts passed on a clean retry.", n => { n.pending = null; n.stage = "Publication Verified"; n.artifacts["publication-verification.json"] = digest("verify68"); });
+          case "VERIFY_SUBSTANTIVE_FAILS":
+            if (state.stage !== "Plugin Portal Public" || state.pending) return reject(state, action, "A substantive mismatch must be established during public verification.");
+            return accept(state, action, "Public state disagrees with the qualified candidate. Waiver and repair-in-place are forbidden.", n => {
+              n.failure = { kind: "post-public substantive failure", reason: "Consumer resolved mismatched metadata", recover: "finalize incomplete record, then qualify next version" };
+              n.stage = "Incomplete publication"; n.outcome = "incomplete-publication"; n.artifacts["publication-verification.json"] = "failed result recorded";
+            });
+          case "PREPARE_FINAL":
+            if (state.stage !== "Publication Verified") return reject(state, action, "Finalization requires passing publication-verification.json.");
+            return accept(state, action, "Evidence hashes and immutable release payload are ready; tag still does not exist.", n => {
+              n.stage = "Finalizing"; n.artifacts["SHA256SUMS"] = digest("sums68"); n.github = { tag: `v${n.candidate.version}`, release: "draft payload prepared" };
+            });
+          case "FINALIZE_SUCCESS":
+            if (state.stage !== "Finalizing" || state.pending) return reject(state, action, "Finalization requires the reviewed payload and no ambiguous GitHub state.");
+            return accept(state, action, state.mode === "dry-run" ? "Simulation ended without creating a tag or release." : "The verified annotated tag and immutable GitHub Release are public.", n => {
+              n.stage = state.mode === "dry-run" ? "Dry-run complete" : "Public Release";
+              n.outcome = state.mode === "dry-run" ? "dry-run-complete" : "public-release";
+              n.github = state.mode === "dry-run" ? { tag: "not created", release: "not created" } : { tag: `v${n.candidate.version} verified`, release: "immutable and attested" };
+            });
+          case "FINALIZE_AMBIGUOUS":
+            if (state.stage !== "Finalizing" || state.pending) return reject(state, action, "Only an attempted GitHub finalization can be ambiguous.");
+            return accept(state, action, "Tag/release writes are frozen until GitHub is reconciled.", n => { n.pending = { surface: "GitHub finalization", kind: "ambiguous write", recordedId: `v${n.candidate.version}`, next: "reconcile" }; });
+          case "RECONCILE_GITHUB_COMPLETE":
+            if (state.pending?.surface !== "GitHub finalization") return reject(state, action, "There is no ambiguous GitHub finalization to reconcile.");
+            return accept(state, action, "The remote tag target, release, assets, hashes, and immutability all match.", n => {
+              n.pending = null; n.stage = "Public Release"; n.outcome = "public-release"; n.github = { tag: `v${n.candidate.version} verified`, release: "immutable and attested" };
+            });
+          case "FINALIZE_WRONG_IMMUTABLE":
+            if (state.stage !== "Finalizing" || state.pending) return reject(state, action, "This failure can only be observed while finalizing a consumed, verified version.");
+            return accept(state, action, "The immutable tag or release disagrees with the verified payload. This version cannot be repaired in place.", n => {
+              n.stage = "Incomplete publication"; n.outcome = "incomplete-publication";
+              n.failure = { kind: "post-public immutable-finalization failure", reason: "wrong immutable tag or malformed immutable release", recover: "publish warning record, then qualify next version" };
+              n.github.release = "immutable but incorrect — warning required";
+            });
+          case "ROTATE_CENTRAL_TOKEN":
+            return accept(state, action, "Replacement token was validated, its generation label recorded, and the old token revoked; no secret was checkpointed.", n => { n.credentials.centralToken = "generation CT-rotated"; });
+          case "ROTATE_PORTAL_KEY":
+            return accept(state, action, "Replacement Portal key was validated through the available non-public path before revocation.", n => { n.credentials.portalKey = "generation PP-rotated"; });
+          case "MARK_INCOMPLETE":
+            if (!state.versionConsumed || !state.failure) return reject(state, action, "An Incomplete record is only for a consumed version with definitive failure.");
+            return reject(state, action, "The state already models the immutable Incomplete outcome; only its warning tag/release record may now be published.");
+          case "START_CORRECTIVE": {
+            if (state.outcome !== "incomplete-publication") return reject(state, action, "A corrective candidate starts only after an Incomplete publication is recorded.");
+            const next = initial("alpha", state.mode);
+            next.candidate.version = "0.1.0-alpha.2";
+            next.candidate.commit = "c93e2a1";
+            next.candidate.kind = "urgent corrective alpha";
+            next.candidate.qualificationRun = "CI-1849 full gates";
+            next.checkpoint.path = checkpointPath(next.candidate.version);
+            next.eventLog.unshift({ accepted: true, action: labels[action], note: "A new version and full qualification created a separate candidate; no completed step was borrowed.", revision: 1 });
+            return next;
+          }
+          default:
+            return reject(state, action, "Unknown action.");
+        }
+      }
+
+      function nextCommand(state) {
+        const cp = state.checkpoint.path;
+        const dry = state.mode === "dry-run" ? " --dry-run" : "";
+        if (state.outcome === "public-release") return { command: "# Complete — no further command is legal.", note: "Any later defect requires a newly qualified version." };
+        if (state.outcome === "dry-run-complete") return { command: "# Dry run complete — no remote state was changed.", note: "Re-run without --dry-run only from the original Qualified Candidate checkpoint." };
+        if (state.outcome === "incomplete-publication") return { command: `./release incomplete --checkpoint ${cp}\n# then qualify a new version; never reuse ${state.candidate.version}`, note: "This publishes the warning evidence record; it cannot turn this version into a Public Release." };
+        if (state.pending) return { command: `./release reconcile --checkpoint ${cp} --surface "${state.pending.surface}"${dry}`, note: "Reconciliation is read-first. It records authoritative state and never repeats the write." };
+        if (state.failure?.kind === "pre-public validation") return { command: `./release central abort --checkpoint ${cp}${dry}`, note: "Because nothing is public, the version remains available for the same bytes or a newly qualified candidate." };
+        const byStage = {
+          "Qualified Candidate": [`./release central upload --checkpoint ${cp}${dry}`, "Reads only Central + signing secrets for this process."],
+          "Central Uploaded": [`./release central validate --checkpoint ${cp}${dry}`, "Uses the recorded deployment ID; it does not upload again."],
+          "Central Validated": [`./release central promote --checkpoint ${cp}${dry}`, "Displays hashes and requires typed version + deployment approval."],
+          "Central Published": [`./release portal submit --checkpoint ${cp}${dry}`, "Displays public Central proof and requires typed version + plugin ID approval."],
+          "Plugin Portal Submitted": [`./release portal status --checkpoint ${cp}${dry}`, "Pending review is not failure, regardless of elapsed time."],
+          "Plugin Portal Public": [`./release verify --checkpoint ${cp}${dry}`, "Runs with an empty Gradle home and no publication credentials."],
+          "Publication Verified": [`./release finalize --checkpoint ${cp} --prepare-only${dry}`, "Builds publication-verification.json, SHA256SUMS, and the reviewed payload before any tag write."],
+          "Finalizing": [`./release finalize --checkpoint ${cp}${dry}`, "Creates/verifies the annotated tag, then publishes the complete immutable release."],
+          "Incomplete publication": [`./release incomplete --checkpoint ${cp}`, "Publishes only the permanent warning record."],
+          "Dry-run complete": ["# Dry run complete", "No remote state changed."]
+        };
+        const [command, note] = byStage[state.stage] || ["./release status --checkpoint " + cp, "Inspect the checkpoint."];
+        return { command, note };
+      }
+
+      function requiredSecrets(state) {
+        if (state.mode === "dry-run") return [];
+        if (state.pending?.surface?.startsWith("Central") || state.stage === "Central Uploaded" || state.stage === "Central Validated") return ["CENTRAL_USERNAME", "CENTRAL_PASSWORD"];
+        if (state.stage === "Qualified Candidate" && !state.failure) return ["CENTRAL_USERNAME", "CENTRAL_PASSWORD", "RELEASE_SIGNING_KEY", "RELEASE_SIGNING_PASSPHRASE"];
+        if (state.pending?.surface?.startsWith("Plugin Portal") || state.stage === "Central Published") return ["GRADLE_PUBLISH_KEY", "GRADLE_PUBLISH_SECRET"];
+        if (state.stage === "Finalizing" || state.outcome === "incomplete-publication") return ["existing gh auth (not exported into Gradle)"];
+        return [];
+      }
+
+      function resumeInputs(state) {
+        return [
+          ["Candidate", `${state.candidate.version} @ ${state.candidate.commit}`],
+          ["Qualification", `${state.candidate.qualificationRun}; manifest + SBOM digests`],
+          ["Central", state.central.deploymentId ? `${state.central.deploymentId}; ${state.central.state}; bundle digest` : state.central.state],
+          ["Portal", state.portal.submissionId ? `${state.portal.submissionId}; ${state.portal.state}` : state.portal.state],
+          ["Public proof", state.central.publicVerified ? "URLs + observed hashes recorded" : "not yet recorded"],
+          ["GitHub", `${state.github.tag || "no tag"}; ${state.github.release}`],
+          ["Credential refs", `${state.credentials.centralToken}; ${state.credentials.portalKey}; ${state.credentials.signingKey}`],
+          ["Checkpoint", `schema ${state.schemaVersion}; revision ${state.checkpoint.revision}; ${state.checkpoint.write} write`]
+        ];
+      }
+
+      function fixture(name, mode = "live") {
+        if (name === "portalSubmitted") return atStage("alpha", mode, "Plugin Portal Submitted", { pending: { surface: "Plugin Portal review", kind: "asynchronous review", recordedId: "portal-0.1", next: "status/reconcile" }, versionConsumed: true });
+        if (name === "portalPublic") return atStage("alpha", mode, "Plugin Portal Public", { versionConsumed: true });
+        if (name === "centralValidated") return atStage("alpha", mode, "Central Validated");
+        if (name === "finalizing") return atStage("alpha", mode, "Finalizing", { versionConsumed: true, artifacts: Object.assign(atStage("alpha", mode, "Finalizing").artifacts, { "publication-verification.json": digest("verify68"), "SHA256SUMS": digest("sums68") }) });
+        if (name === "incomplete") return atStage("alpha", mode, "Incomplete publication", { outcome: "incomplete-publication", versionConsumed: true, failure: { kind: "post-public definitive failure", reason: "Plugin Portal rejected the submission", recover: "next version" }, portal: { submissionId: "portal-0.1", state: "rejected" } });
+        return initial(name === "patch" ? "patch" : "alpha", mode);
+      }
+
+      return { stages, labels, initial, reduce, nextCommand, requiredSecrets, resumeInputs, fixture };
+    })();
+
+    const allActions = [
+      "CENTRAL_UPLOAD", "CENTRAL_UPLOAD_AMBIGUOUS", "RECONCILE_UPLOAD_FOUND", "RECONCILE_UPLOAD_ABSENT",
+      "CENTRAL_VALIDATION_PASSES", "CENTRAL_VALIDATION_PENDING", "OBSERVE_CENTRAL_VALIDATED", "CENTRAL_VALIDATION_FAILS", "ABORT_CENTRAL", "CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED",
+      "PORTAL_SUBMIT", "PORTAL_SUBMIT_AMBIGUOUS", "RECONCILE_PORTAL_FOUND", "PORTAL_PUBLIC", "PORTAL_REJECTS",
+      "VERIFY_PASSES", "VERIFY_TRANSIENT_FAILS", "RETRY_VERIFY_PASSES", "VERIFY_SUBSTANTIVE_FAILS",
+      "PREPARE_FINAL", "FINALIZE_SUCCESS", "FINALIZE_AMBIGUOUS", "RECONCILE_GITHUB_COMPLETE", "FINALIZE_WRONG_IMMUTABLE",
+      "ROTATE_CENTRAL_TOKEN", "ROTATE_PORTAL_KEY", "START_CORRECTIVE"
+    ];
+
+    const scenarios = [
+      { id: "alpha", name: "First alpha", fixture: "alpha", description: "The complete first-release path. Watch Central consume the version before Portal review, and the tag appear only after public verification.", steps: ["CENTRAL_UPLOAD", "CENTRAL_VALIDATION_PASSES", "CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED", "PORTAL_SUBMIT", "PORTAL_PUBLIC", "VERIFY_PASSES", "PREPARE_FINAL", "FINALIZE_SUCCESS"] },
+      { id: "patch", name: "Routine patch", fixture: "patch", description: "A patch uses the same gates, evidence, approvals, and ordering. There is no shortened familiar-release path.", steps: ["CENTRAL_UPLOAD", "CENTRAL_VALIDATION_PASSES", "CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED", "PORTAL_SUBMIT", "PORTAL_PUBLIC", "VERIFY_PASSES", "PREPARE_FINAL", "FINALIZE_SUCCESS"] },
+      { id: "dry", name: "Dry run", fixture: "alpha", mode: "dry-run", description: "The entire contract is simulated, but secret-bearing variables and remote writes are refused. The result is explicitly not a Public Release.", steps: ["CENTRAL_UPLOAD", "CENTRAL_VALIDATION_PASSES", "CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED", "PORTAL_SUBMIT", "PORTAL_PUBLIC", "VERIFY_PASSES", "PREPARE_FINAL", "FINALIZE_SUCCESS"] },
+      { id: "central-fail", name: "Central validation fails", fixture: "alpha", description: "A private validation failure does not consume the version. Abort the deployment, then retry only identical bytes or requalify changed content.", steps: ["CENTRAL_UPLOAD", "CENTRAL_VALIDATION_FAILS", "ABORT_CENTRAL", "CENTRAL_UPLOAD"] },
+      { id: "portal-reject", name: "Portal rejects", fixture: "alpha", description: "Central is already public when Portal can reject. The version is consumed and becomes an immutable Incomplete publication.", steps: ["CENTRAL_UPLOAD", "CENTRAL_VALIDATION_PASSES", "CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED", "PORTAL_SUBMIT", "PORTAL_REJECTS", "START_CORRECTIVE"] },
+      { id: "consumer-fail", name: "Consumer mismatch", fixture: "portalPublic", description: "A substantive clean-consumer or metadata mismatch cannot be waived or retried as infrastructure. It creates an Incomplete publication.", steps: ["VERIFY_SUBSTANTIVE_FAILS", "START_CORRECTIVE"] },
+      { id: "rotation", name: "Credential rotation", fixture: "centralValidated", description: "Rotate credential material without changing the candidate or replaying completed publication work. Only generation labels—not values—enter the checkpoint.", steps: ["ROTATE_CENTRAL_TOKEN", "CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED", "ROTATE_PORTAL_KEY", "PORTAL_SUBMIT"] },
+      { id: "urgent", name: "Urgent follow-up", fixture: "incomplete", description: "Urgency changes neither gates nor order. A new version starts from a new full qualification; prior registry success is not borrowed.", steps: ["START_CORRECTIVE", "CENTRAL_UPLOAD", "CENTRAL_VALIDATION_PASSES", "CENTRAL_PROMOTE"] },
+      { id: "upload-pending", name: "Ambiguous upload", fixture: "alpha", description: "An interrupted upload is reconciled before retry. If the deployment exists, resume it; never upload the same version blindly.", steps: ["CENTRAL_UPLOAD_AMBIGUOUS", "RECONCILE_UPLOAD_FOUND", "CENTRAL_VALIDATION_PASSES"] },
+      { id: "validation-pending", name: "Central validation pending", fixture: "alpha", description: "Validation may remain asynchronous. Preserve the deployment ID and observe the same attempt; elapsed time neither fails it nor permits re-upload.", steps: ["CENTRAL_UPLOAD", "CENTRAL_VALIDATION_PENDING", "OBSERVE_CENTRAL_VALIDATED", "CENTRAL_PROMOTE"] },
+      { id: "promotion-pending", name: "Central propagation", fixture: "centralValidated", description: "Promotion is issued once. Registry delay remains Pending until the exact deployment and public coordinates can be observed.", steps: ["CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED", "PORTAL_SUBMIT"] },
+      { id: "portal-ambiguous", name: "Ambiguous Portal submit", fixture: "alpha", description: "If submission times out after Central is public, reconcile publisher history and the exact marker before another write. Resume review when the first submission exists.", steps: ["CENTRAL_UPLOAD", "CENTRAL_VALIDATION_PASSES", "CENTRAL_PROMOTE", "CENTRAL_PUBLIC_OBSERVED", "PORTAL_SUBMIT_AMBIGUOUS", "RECONCILE_PORTAL_FOUND", "PORTAL_PUBLIC"] },
+      { id: "portal-pending", name: "Portal review", fixture: "portalSubmitted", description: "First-release review may take days. Elapsed time never turns this into failure; observe the recorded submission until it becomes public or definitively rejects.", steps: ["PORTAL_PUBLIC", "VERIFY_PASSES"] },
+      { id: "verify-pending", name: "Transient verification", fixture: "portalPublic", description: "Retry only after classifying the cause as observational or infrastructural, and only against unchanged public artifacts.", steps: ["VERIFY_TRANSIENT_FAILS", "RETRY_VERIFY_PASSES", "PREPARE_FINAL"] },
+      { id: "github-pending", name: "GitHub ambiguity", fixture: "finalizing", description: "After a timeout, reconcile the tag target, release, assets, hashes, and immutability. Do not push the tag or publish the release twice.", steps: ["FINALIZE_AMBIGUOUS", "RECONCILE_GITHUB_COMPLETE"] },
+      { id: "github-wrong", name: "Wrong immutable release", fixture: "finalizing", description: "A wrong immutable tag or malformed immutable release is not repaired. Preserve it as Incomplete and move the correction to a newly qualified version.", steps: ["FINALIZE_WRONG_IMMUTABLE", "START_CORRECTIVE"] },
+      { id: "illegal", name: "Illegal shortcut", fixture: "alpha", description: "Try to submit the Portal publication before Central is public. The checkpoint must remain unchanged.", steps: ["PORTAL_SUBMIT", "CENTRAL_UPLOAD"] }
+    ];
+
+    let state = ReleaseContract.initial();
+    let activeScenario = scenarios[0];
+    let stepIndex = 0;
+
+    const $ = id => document.getElementById(id);
+    const escapeHtml = value => String(value).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const stageIndex = stage => ReleaseContract.stages.indexOf(stage);
+
+    function dispatch(action, fromScenario = false) {
+      state = ReleaseContract.reduce(state, action);
+      if (fromScenario) stepIndex += 1;
+      render();
+    }
+
+    function startScenario(scenario) {
+      activeScenario = scenario;
+      stepIndex = 0;
+      const mode = scenario.mode || $("modeSelect").value;
+      state = ReleaseContract.fixture(scenario.fixture, mode);
+      $("modeSelect").value = mode;
+      $("candidateSelect").value = scenario.fixture === "patch" ? "patch" : "alpha";
+      render();
+    }
+
+    function render() {
+      const idx = stageIndex(state.stage);
+      const statusClass = state.outcome === "incomplete-publication" ? "bad" : state.pending ? "warn" : state.outcome.includes("complete") || state.outcome === "public-release" ? "good" : "";
+      $("statusRow").innerHTML = `
+        <span class="pill ${statusClass}">${escapeHtml(state.stage)}</span>
+        <span class="pill">${escapeHtml(state.mode)}</span>
+        <span class="pill ${state.versionConsumed ? "warn" : "good"}">${state.versionConsumed ? "version consumed" : "version reusable"}</span>
+        ${state.pending ? `<span class="pill warn">Pending: ${escapeHtml(state.pending.surface)}</span>` : ""}
+        ${state.failure ? `<span class="pill bad">${escapeHtml(state.failure.kind)}</span>` : ""}`;
+
+      $("timeline").innerHTML = ReleaseContract.stages.map((stage, i) => {
+        const cls = state.outcome === "incomplete-publication" && i >= Math.max(idx, 0) ? "blocked" : i < idx ? "done" : i === idx ? "current" : "";
+        return `<div class="stage ${cls}">${escapeHtml(stage)}</div>`;
+      }).join("");
+
+      const facts = [
+        ["Version", state.candidate.version], ["Qualified commit", state.candidate.commit], ["Candidate type", state.candidate.kind],
+        ["Checkpoint", state.checkpoint.path], ["Revision", state.checkpoint.revision], ["Last transition", state.checkpoint.lastTransition],
+        ["Central deployment", state.central.deploymentId || "none"], ["Central state", state.central.state], ["Portal state", state.portal.state],
+        ["Tag", state.github.tag || "not created"], ["Release", state.github.release], ["Recovery", state.failure?.recover || state.pending?.next || "advance normally"]
+      ];
+      $("facts").innerHTML = facts.map(([k, v]) => `<div class="fact"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("");
+      $("rejection").textContent = state.lastRejection;
+
+      $("actions").innerHTML = allActions.map(action => {
+        const risk = ["CENTRAL_PROMOTE", "PORTAL_SUBMIT", "FINALIZE_SUCCESS", "PORTAL_REJECTS", "VERIFY_SUBSTANTIVE_FAILS"].includes(action) ? "irreversible" : "";
+        return `<button class="button small" data-action="${action}" data-risk="${risk}">${escapeHtml(ReleaseContract.labels[action])}</button>`;
+      }).join("");
+      $("actions").querySelectorAll("button").forEach(button => button.addEventListener("click", () => dispatch(button.dataset.action)));
+
+      const next = ReleaseContract.nextCommand(state);
+      $("command").textContent = next.command;
+      $("commandNote").textContent = next.note;
+
+      const secrets = ReleaseContract.requiredSecrets(state);
+      $("secrets").innerHTML = secrets.length
+        ? secrets.map(secret => `<li><span>process-only</span><code>${escapeHtml(secret)}</code></li>`).join("") + `<li><span>Checkpointed values</span><strong>none</strong></li>`
+        : `<li><span>This transition</span><strong>No secret material</strong></li><li><span>Checkpointed values</span><strong>none</strong></li>`;
+
+      $("artifacts").innerHTML = Object.entries(state.artifacts).map(([name, value]) => `<li><strong>${escapeHtml(name)}</strong><span>${escapeHtml(value)}</span></li>`).join("");
+      $("resumeInputs").innerHTML = ReleaseContract.resumeInputs(state).map(([name, value]) => `<li><strong>${escapeHtml(name)}</strong><span>${escapeHtml(value)}</span></li>`).join("");
+      $("events").innerHTML = state.eventLog.map(event => `<li class="${event.accepted ? "accepted" : "rejected"}"><strong>${escapeHtml(event.action)}</strong><small>checkpoint r${event.revision}</small><span>${escapeHtml(event.note)}</span></li>`).join("");
+
+      $("tabs").innerHTML = scenarios.map(s => `<button class="tab ${s.id === activeScenario.id ? "active" : ""}" role="tab" data-scenario="${s.id}">${escapeHtml(s.name)}</button>`).join("");
+      $("tabs").querySelectorAll("button").forEach(button => button.addEventListener("click", () => startScenario(scenarios.find(s => s.id === button.dataset.scenario))));
+
+      const scenarioComplete = stepIndex >= activeScenario.steps.length;
+      $("scenario").innerHTML = `
+        <h3>${escapeHtml(activeScenario.name)}</h3>
+        <p>${escapeHtml(activeScenario.description)}</p>
+        <button class="button small" id="restartScenario">Restart walkthrough</button>
+        <div class="step-list">
+          ${activeScenario.steps.map((action, i) => `<div class="step ${i < stepIndex ? "done" : i === stepIndex ? "current" : ""}">
+            <span class="step-index">${i < stepIndex ? "✓" : i + 1}</span>
+            <span class="step-copy"><strong>${escapeHtml(ReleaseContract.labels[action])}</strong><span>${i === stepIndex ? "Press to apply this event" : i < stepIndex ? "Checkpoint recorded" : "Waiting"}</span></span>
+            <button class="button small ${i === stepIndex ? "primary" : ""}" data-step-action="${action}" ${i === stepIndex ? "" : "disabled"}>Apply</button>
+          </div>`).join("")}
+          ${scenarioComplete ? `<div class="notice"><strong>Walkthrough complete.</strong> Inspect the final state, evidence, and resume inputs.</div>` : ""}
+        </div>`;
+      $("restartScenario").addEventListener("click", () => startScenario(activeScenario));
+      const stepButton = $("scenario").querySelector("button[data-step-action]:not(:disabled)");
+      if (stepButton) stepButton.addEventListener("click", () => dispatch(stepButton.dataset.stepAction, true));
+    }
+
+    $("resetButton").addEventListener("click", () => {
+      activeScenario = scenarios[0]; stepIndex = 0;
+      state = ReleaseContract.initial($("candidateSelect").value, $("modeSelect").value);
+      render();
+    });
+    $("copyButton").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(JSON.stringify(state, null, 2));
+      $("copyButton").textContent = "Copied";
+      setTimeout(() => $("copyButton").textContent = "Copy checkpoint JSON", 1200);
+    });
+
+    render();
+  </script>
+</body>
+</html>
