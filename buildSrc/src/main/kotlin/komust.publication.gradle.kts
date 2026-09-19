@@ -12,6 +12,7 @@ import io.komust.conventions.PublicIdentity
 plugins {
     java
     `maven-publish`
+    signing
 }
 
 val identityName = providers.gradleProperty("komustPublicIdentity").orNull ?: "preferred"
@@ -66,6 +67,24 @@ publishing {
             }
         }
     }
+}
+
+val qualificationSigningKey = providers.environmentVariable("KOMUST_QUALIFICATION_SIGNING_KEY")
+val qualificationSigningPassword = providers.environmentVariable("KOMUST_QUALIFICATION_SIGNING_PASSWORD")
+
+signing {
+    setRequired {
+        gradle.taskGraph.allTasks.any { task ->
+            task.name.startsWith("nmcp") || task.name.contains("CentralBundle")
+        }
+    }
+    if (qualificationSigningKey.isPresent) {
+        useInMemoryPgpKeys(
+            qualificationSigningKey.get(),
+            qualificationSigningPassword.orNull.orEmpty(),
+        )
+    }
+    sign(publishing.publications)
 }
 
 val cleanQualificationRepository = rootProject.tasks.findByName("cleanQualificationRepository")

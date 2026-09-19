@@ -1,5 +1,6 @@
 plugins {
     id("komust.kotlin-module")
+    id("com.gradleup.nmcp")
 }
 
 kotlin {

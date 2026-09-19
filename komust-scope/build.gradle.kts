@@ -1,5 +1,6 @@
 plugins {
     id("komust.kotlin-module")
+    id("com.gradleup.nmcp")
     // Version comes from the build classpath (buildSrc pins it to the catalog
     // Kotlin version); scope.json is (de)serialised with kotlinx.serialization.
     kotlin("plugin.serialization")
