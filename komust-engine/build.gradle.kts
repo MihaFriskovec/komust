@@ -1,5 +1,6 @@
 plugins {
     id("komust.kotlin-module")
+    id("com.gradleup.nmcp")
     // kotlinx.serialization: the agent output contract (#5/#35) report.json /
     // survivors.json models are @Serializable, and the controller <-> worker-JVM
     // wire protocol (#34) is line-framed JSON. Version comes from the build

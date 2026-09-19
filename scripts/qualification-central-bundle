@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd)
+gradle_user_home=${GRADLE_USER_HOME:-"$repo_root/.gradle-user-home"}
+key_home=$(mktemp -d "${TMPDIR:-/tmp}/komust-qualification-key.XXXXXX")
+public_key="$repo_root/build/nmcp/qualification-public-key.asc"
+
+cleanup() {
+    rm -rf "$key_home"
+}
+trap cleanup EXIT
+
+chmod 700 "$key_home"
+mkdir -p "$(dirname "$public_key")"
+identity="komust qualification $(date -u +%Y%m%dT%H%M%SZ) <qualification@invalid>"
+gpg --batch --homedir "$key_home" --passphrase '' --quick-generate-key "$identity" rsa4096 sign 1d >/dev/null 2>&1
+gpg --batch --homedir "$key_home" --armor --export "$identity" > "$public_key"
+signing_key=$(gpg --batch --homedir "$key_home" --armor --export-secret-keys "$identity")
+
+KOMUST_QUALIFICATION_SIGNING_KEY="$signing_key" \
+KOMUST_QUALIFICATION_SIGNING_PASSWORD='' \
+GRADLE_USER_HOME="$gradle_user_home" \
+    "$repo_root/gradlew" -p "$repo_root" qualificationCentralBundle \
+    -PqualificationSigningPublicKey="$public_key" "$@"
+
+printf 'Central candidate: %s\n' "$repo_root/build/nmcp/zip/aggregation.zip"
+printf 'Qualification public key: %s\n' "$public_key"
+printf 'Verification report: %s\n' "$repo_root/build/nmcp/verification.txt"
