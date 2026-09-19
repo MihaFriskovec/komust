@@ -36,13 +36,18 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
 
     private lateinit var extension: KomustExtension
 
-    /** The plugin's own version, from the generated resource; immutable for the plugin's lifetime. */
-    private val pluginVersion: String by lazy {
+    /** The plugin's own public coordinates, generated from the single build authority. */
+    private val pluginCoordinates: Properties by lazy {
         KomustGradlePlugin::class.java.classLoader
             .getResourceAsStream("io/komust/gradle/komust-version.properties")
-            ?.use { Properties().apply { load(it) }.getProperty("version") }
-            ?: "0.1.0-SNAPSHOT"
+            ?.use { Properties().apply { load(it) } }
+            ?: Properties().apply {
+                setProperty("version", "0.1.0-SNAPSHOT")
+                setProperty("group", "io.komust")
+            }
     }
+    private val pluginVersion: String by lazy { pluginCoordinates.getProperty("version") }
+    private val pluginGroup: String by lazy { pluginCoordinates.getProperty("group") }
     private lateinit var resolveScope: TaskProvider<KomustResolveScopeTask>
     private lateinit var mutationTest: TaskProvider<MutationTestTask>
 
@@ -86,8 +91,8 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
                 attrs.attribute(Category.CATEGORY_ATTRIBUTE, target.objects.named(Category::class.java, Category.LIBRARY))
             }
         }
-        target.dependencies.add(engineDeps.name, "io.komust:komust-engine:$komustVersion")
-        target.dependencies.add(runtimeGuardDeps.name, "io.komust:komust-compiler-plugin:$komustVersion")
+        target.dependencies.add(engineDeps.name, "$pluginGroup:komust-engine:$komustVersion")
+        target.dependencies.add(runtimeGuardDeps.name, "$pluginGroup:komust-compiler-plugin:$komustVersion")
 
         resolveScope = target.tasks.register(KomustResolveScopeTask.NAME, KomustResolveScopeTask::class.java) { task ->
             task.group = GROUP
@@ -191,7 +196,7 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
     override fun getCompilerPluginId(): String = COMPILER_PLUGIN_ID
 
     override fun getPluginArtifact(): SubpluginArtifact =
-        SubpluginArtifact("io.komust", "komust-compiler-plugin", pluginVersion)
+        SubpluginArtifact(pluginGroup, "komust-compiler-plugin", pluginVersion)
 
     override fun isApplicable(kotlinCompilation: KotlinCompilation<*>): Boolean =
         kotlinCompilation.name == MUTATION_COMPILATION_NAME
