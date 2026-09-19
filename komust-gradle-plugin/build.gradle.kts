@@ -1,8 +1,10 @@
 import io.komust.conventions.PublicIdentity
+import org.gradle.plugin.compatibility.compatibility
+import org.gradle.plugin.devel.tasks.ValidatePlugins
 
 plugins {
     id("komust.kotlin-module")
-    `java-gradle-plugin`
+    id("com.gradle.plugin-publish")
 }
 
 val publicPluginId = PublicIdentity.named(
@@ -32,7 +34,7 @@ dependencies {
 // coordinates the fork resolves both track the plugin's own version — exposed to
 // the code through a generated properties resource.
 val komustVersionResource: Provider<Directory> = layout.buildDirectory.dir("generated/komust-version")
-val generateKomustVersion by tasks.registering {
+val generateKomustVersion = tasks.register("generateKomustVersion") {
     val outDir = komustVersionResource
     val version = project.version.toString()
     val group = project.group.toString()
@@ -51,14 +53,31 @@ sourceSets.main {
 }
 
 gradlePlugin {
+    website.set("https://github.com/MihaFriskovec/komust")
+    vcsUrl.set("https://github.com/MihaFriskovec/komust")
     plugins {
         create("komust") {
             id = publicPluginId
             implementationClass = "io.komust.gradle.KomustGradlePlugin"
             displayName = "komust"
             description = "Kotlin-native mutation testing — the mutationTest task and komust {} DSL."
+            tags.set(listOf("kotlin", "mutation-testing", "testing", "test-quality"))
+            compatibility {
+                features {
+                    configurationCache = false
+                }
+            }
         }
     }
+}
+
+tasks.withType<ValidatePlugins>().configureEach {
+    enableStricterValidation.set(true)
+    failOnWarning.set(true)
+}
+
+tasks.named("publishPlugins") {
+    dependsOn("validatePlugins", "validateReleaseAuthority")
 }
 
 // The functional (TestKit) smoke test publishes the four komust modules to a
