@@ -11,4 +11,13 @@ dependencies {
     // version. Used by `komust-scope` (scope.json) and later `komust-engine`
     // (agent JSON output contract).
     implementation(libs.kotlin.serialization.plugin)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(gradleTestKit())
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

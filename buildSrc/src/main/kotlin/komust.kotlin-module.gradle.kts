@@ -15,25 +15,13 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 plugins {
     kotlin("jvm")
     jacoco
-    `maven-publish`
+    id("komust.publication")
 }
 
 private val libs = the<org.gradle.api.artifacts.VersionCatalogsExtension>().named("libs")
 
-group = providers.gradleProperty("komustGroup").getOrElse("io.komust")
-version = providers.gradleProperty("komustVersion").getOrElse("0.1.0-SNAPSHOT")
-
 kotlin {
     jvmToolchain(21)
-}
-
-publishing {
-    repositories {
-        maven {
-            name = "testMaven"
-            url = uri(rootProject.layout.buildDirectory.dir("test-maven"))
-        }
-    }
 }
 
 // `java-gradle-plugin` (komust-gradle-plugin) registers its own publications from

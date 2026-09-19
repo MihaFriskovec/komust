@@ -1,7 +1,13 @@
+import io.komust.conventions.PublicIdentity
+
 plugins {
     id("komust.kotlin-module")
     `java-gradle-plugin`
 }
+
+val publicPluginId = PublicIdentity.named(
+    providers.gradleProperty("komustPublicIdentity").getOrElse("preferred"),
+).pluginId
 
 dependencies {
     // The thin adapter invokes the scope resolver in-process (ADR-0005 §1) to
@@ -29,12 +35,14 @@ val komustVersionResource: Provider<Directory> = layout.buildDirectory.dir("gene
 val generateKomustVersion by tasks.registering {
     val outDir = komustVersionResource
     val version = project.version.toString()
+    val group = project.group.toString()
     inputs.property("version", version)
+    inputs.property("group", group)
     outputs.dir(outDir)
     doLast {
         outDir.get().file("io/komust/gradle/komust-version.properties").asFile.apply {
             parentFile.mkdirs()
-            writeText("version=$version\n")
+            writeText("version=$version\ngroup=$group\n")
         }
     }
 }
@@ -45,7 +53,7 @@ sourceSets.main {
 gradlePlugin {
     plugins {
         create("komust") {
-            id = "io.komust"
+            id = publicPluginId
             implementationClass = "io.komust.gradle.KomustGradlePlugin"
             displayName = "komust"
             description = "Kotlin-native mutation testing — the mutationTest task and komust {} DSL."
@@ -67,6 +75,8 @@ tasks.named<Test>("test") {
     // passes --refresh-dependencies so a stale one is never resolved.
     systemProperty("komust.testMavenRepo", testMavenRepo.get().asFile.absolutePath)
     systemProperty("komust.version", project.version.toString())
+    systemProperty("komust.group", project.group.toString())
+    systemProperty("komust.pluginId", publicPluginId)
     systemProperty("komust.kotlinVersion", libs.versions.kotlin.get())
     // TestKit forks a Gradle build that itself forks compiler + engine JVMs — give it room.
     maxHeapSize = "1g"
