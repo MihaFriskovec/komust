@@ -8,13 +8,17 @@ import io.komust.engine.sweep.MutantFixtureProject
 import io.komust.runtime.MutantRegistry
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.file.Path
+import kotlin.io.path.exists
 import kotlin.io.path.readText
 
 /**
@@ -59,7 +63,11 @@ class EngineRunnerTest {
 
     @AfterEach fun reset() = MutantRegistry.clear()
 
-    private fun run(tmp: Path): EngineRunner.Outcome {
+    private fun run(
+        tmp: Path,
+        config: EngineInput.EngineConfig = EngineInput.EngineConfig(workers = 2),
+        standardOut: ByteArrayOutputStream? = null,
+    ): EngineRunner.Outcome {
         val fx = MutantFixtureProject.compile(
             tmp.toFile().resolve("proj"),
             mainSources = listOf(CALC),
@@ -73,16 +81,43 @@ class EngineRunnerTest {
             workerClasspath = fx.workerClasspath.map { it.toString() },
             reloadableRoots = fx.reloadableRoots.map { it.toString() },
             outputDir = tmp.resolve("out").toString(),
-            config = EngineInput.EngineConfig(workers = 2),
+            config = config,
             komustVersion = "9.9.9-test",
         )
         val previous = Thread.currentThread().contextClassLoader
+        val previousOut = System.out
         Thread.currentThread().contextClassLoader = fx.classLoader
+        standardOut?.let { System.setOut(PrintStream(it, true, Charsets.UTF_8)) }
         return try {
             EngineRunner.run(input)
         } finally {
+            System.setOut(previousOut)
             Thread.currentThread().contextClassLoader = previous
         }
+    }
+
+    @Test fun `human report flag controls whether report_txt is written`(@TempDir tmp: Path) {
+        val outcome = run(tmp, EngineInput.EngineConfig(workers = 2, humanReport = false))
+        val completed = assertInstanceOf<EngineRunner.Outcome.Completed>(outcome)
+
+        assertFalse(completed.report.humanReport.exists())
+        assertTrue(completed.report.reportJson.exists())
+        assertTrue(completed.report.survivorsJson.exists())
+    }
+
+    @Test fun `console survivors flag prints the survivor projection summaries`(@TempDir tmp: Path) {
+        val captured = ByteArrayOutputStream()
+        val outcome = run(
+            tmp,
+            EngineInput.EngineConfig(workers = 2, consoleSurvivorsOnly = true),
+            standardOut = captured,
+        )
+        val completed = assertInstanceOf<EngineRunner.Outcome.Completed>(outcome)
+        val survivors = ReportJson.decodeSurvivors(completed.report.survivorsJson.readText())
+        val outputLines = captured.toString(Charsets.UTF_8).lineSequence().filter(String::isNotBlank).toList()
+        val expected = survivors.survivors.map { it.summary } + survivors.noCoverage.map { it.summary }
+
+        assertEquals(expected, outputLines)
     }
 
     @Test fun `writes report_json and survivors_json for the whole run`(@TempDir tmp: Path) {

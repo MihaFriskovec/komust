@@ -1,8 +1,11 @@
 package io.komust.engine.report
 
 import java.nio.file.Path
+import kotlin.io.path.exists
 import kotlin.io.path.readText
+import kotlin.io.path.writeText
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -27,6 +30,16 @@ class ReportWriterTest {
         val written = ReportWriter.write(tmp, ReportFixture.report())
         assertTrue(written.reportJson.readText().endsWith("}\n"))
         assertTrue(written.survivorsJson.readText().endsWith("}\n"))
+    }
+
+    @Test
+    fun `can omit the human report while retaining the json artifacts`(@TempDir tmp: Path) {
+        tmp.resolve(ReportWriter.HUMAN_REPORT).writeText("stale report")
+        val written = ReportWriter.write(tmp, ReportFixture.report(), humanReport = false)
+
+        assertTrue(written.reportJson.exists())
+        assertTrue(written.survivorsJson.exists())
+        assertFalse(written.humanReport.exists())
     }
 
     @Test

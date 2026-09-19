@@ -1,16 +1,20 @@
 # `report.json` / `survivors.json` format
 
 komust's primary output is machine-readable JSON — the **agent-facing output
-contract** (#5, ADR-0005). A run writes three files under `build/komust/`:
+contract** (#5, ADR-0005). A run writes two unconditional files under
+`build/komust/` and, by default, one optional human report:
 
 | File            | Role                                                                                     |
 | --------------- | --------------------------------------------------------------------------------------- |
 | `report.json`   | Lossless canonical record — every mutant + full run metadata. **The source of truth.**  |
 | `survivors.json`| Token-dense projection — only the actionable outcomes, sized for an agent context window.|
-| `report.txt`    | Human report, rendered **from** `report.json` so it can never disagree with it.          |
+| `report.txt`    | Human report, rendered **from** `report.json` when `output.humanReport` is enabled (the default). |
 
-`survivors.json` and `report.txt` are derived from the re-read `report.json`, not
-from run state.
+`survivors.json` and, when enabled, `report.txt` are derived from the re-read
+`report.json`, not from run state. `output.consoleSurvivorsOnly = true` prints
+the `summary` lines from the same survivor and no-coverage projection to the
+console: survivors first, then no-coverage mutants, with each group retaining
+report order.
 
 ## `report.json`
 

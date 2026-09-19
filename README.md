@@ -109,7 +109,7 @@ komust {
 
     output {
         humanReport.set(true)        // render report.txt (default: true)
-        consoleSurvivorsOnly.set(false)
+        consoleSurvivorsOnly.set(false) // print survivor + no-coverage summaries (default: false)
     }
 }
 ```
@@ -193,7 +193,7 @@ including a tutorial on fixing the surviving mutant.
 2. **Mutation compilation** — a dedicated Kotlin compilation (separate from `compileKotlin`) applies the K2 compiler plugin, which weaves guarded mutants into the IR
 3. **Coverage pass** — a single JaCoCo-instrumented run of the full test suite over the unmutated program builds the `(class, line) → tests` index
 4. **Mutant sweep** — for each in-scope mutant, the runtime switch activates it, only covering tests run (fastest-first, fail-fast), and the result is recorded
-5. **Report** — `report.json`, `survivors.json`, and `report.txt` are emitted to `build/komust/`
+5. **Report** — `report.json` and `survivors.json` are emitted to `build/komust/`; `report.txt` is also emitted when `humanReport` is enabled
 
 ## Architecture
 

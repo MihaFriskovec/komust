@@ -113,6 +113,16 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
             task.kotlinVersion.set(runCatching { target.getKotlinPluginVersion() }.getOrDefault("unknown"))
             task.dependsOn(resolveScope)
         }
+        val upToDateNotice = target.tasks.register("komustMutationTestUpToDateNotice") { task ->
+            task.description = "Shows where the existing komust reports are when mutationTest is up-to-date."
+            task.onlyIf("mutationTest was up-to-date") { mutationTest.get().state.upToDate }
+            task.doLast {
+                task.logger.lifecycle(
+                    "komust: mutationTest is up-to-date — reports → ${komustDir.get().asFile}",
+                )
+            }
+        }
+        mutationTest.configure { it.finalizedBy(upToDateNotice) }
 
         // A single set of `@Option`s on `mutationTest` drives scope resolution
         // too — feed its values across as plain value providers (no task dep).

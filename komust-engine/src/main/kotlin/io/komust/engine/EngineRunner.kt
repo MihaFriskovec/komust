@@ -7,6 +7,7 @@ import io.komust.engine.coverage.CoveragePassResult
 import io.komust.engine.coverage.TestId
 import io.komust.engine.report.Counts
 import io.komust.engine.report.ReportBuilder
+import io.komust.engine.report.ReportJson
 import io.komust.engine.report.ReportWriter
 import io.komust.engine.report.WrittenReport
 import io.komust.engine.sweep.Mutant
@@ -18,6 +19,7 @@ import io.komust.engine.sweep.TimeoutPolicy
 import io.komust.engine.sweep.forked.ForkedMutantSweep
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.io.path.readText
 
 /**
  * The **core engine** (ADR-0005): given an [EngineInput], runs the coverage pass
@@ -69,7 +71,16 @@ public object EngineRunner {
             sweep = sweep,
             run = ReportBuilder.RunInfo(startedAt, Instant.now(), input.komustVersion),
         )
-        val written = ReportWriter.write(Path.of(input.outputDir), report)
+        val written = ReportWriter.write(
+            outputDir = Path.of(input.outputDir),
+            report = report,
+            humanReport = input.config.humanReport,
+        )
+        if (input.config.consoleSurvivorsOnly) {
+            val actionable = ReportJson.decodeSurvivors(written.survivorsJson.readText())
+            (actionable.survivors.map { it.summary } + actionable.noCoverage.map { it.summary })
+                .forEach(::println)
+        }
         return Outcome.Completed(written, report.run.counts)
     }
 

@@ -2,19 +2,20 @@ package io.komust.engine.report
 
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteIfExists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /**
- * Writes a run's three artifacts under `build/komust/` (#5):
+ * Writes a run's JSON artifacts and optional human report under `build/komust/` (#5):
  *
  *  - `report.json`   — the lossless canonical record ([Report]),
  *  - `survivors.json` — the token-dense projection ([Survivors]),
- *  - `report.txt`     — the full human report ([HumanReport.render]).
+ *  - `report.txt`     — the full human report ([HumanReport.render]), when enabled.
  *
- * `survivors.json` and `report.txt` are derived from the **re-read**
- * `report.json`, not from the in-memory [Report], so the three files provably
- * agree with the bytes on disk (story 29).
+ * `survivors.json` and the optional `report.txt` are derived from the
+ * **re-read** `report.json`, not from the in-memory [Report], so the projections
+ * provably agree with the bytes on disk (story 29).
  *
  * Every file ends with a trailing newline, matching `scope.json`
  * (`docs/scope-json.md`).
@@ -33,7 +34,7 @@ public object ReportWriter {
     public const val SURVIVORS_JSON: String = "survivors.json"
     public const val HUMAN_REPORT: String = "report.txt"
 
-    public fun write(outputDir: Path, report: Report): WrittenReport {
+    public fun write(outputDir: Path, report: Report, humanReport: Boolean = true): WrittenReport {
         outputDir.createDirectories()
 
         val reportPath = outputDir.resolve(REPORT_JSON)
@@ -47,15 +48,18 @@ public object ReportWriter {
         val survivorsPath = outputDir.resolve(SURVIVORS_JSON)
         survivorsPath.writeText(ReportJson.encodeSurvivors(survivors) + "\n")
 
-        val humanText = HumanReport.render(persisted)
         val humanPath = outputDir.resolve(HUMAN_REPORT)
-        humanPath.writeText(humanText)
+        if (humanReport) {
+            humanPath.writeText(HumanReport.render(persisted))
+        } else {
+            humanPath.deleteIfExists()
+        }
 
         return WrittenReport(reportPath, survivorsPath, humanPath)
     }
 }
 
-/** Paths of the three files [ReportWriter.write] produced. */
+/** Paths reserved for the artifacts [ReportWriter.write] manages; [humanReport] may be absent on disk. */
 public data class WrittenReport(
     val reportJson: Path,
     val survivorsJson: Path,

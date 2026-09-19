@@ -57,6 +57,7 @@ You'll see:
 komust: 41 mutant(s) — 29 killed, 3 survived, 9 no-coverage, 0 timeout
 komust: report → komust-example/build/komust/report.json
 komust: survivors → komust-example/build/komust/survivors.json
+komust: human report → komust-example/build/komust/report.txt
 ```
 
 Outputs land in `komust-example/build/komust/`:
@@ -65,7 +66,7 @@ Outputs land in `komust-example/build/komust/`:
 | --- | --- |
 | `report.json` | every mutant and its outcome (the full machine-readable report) |
 | `survivors.json` | just the actionable mutants — survivors + no-coverage |
-| `report.txt` | the same, human-readable |
+| `report.txt` | the same, human-readable (written by default; disable with `output.humanReport`) |
 
 ## What the report tells you
 

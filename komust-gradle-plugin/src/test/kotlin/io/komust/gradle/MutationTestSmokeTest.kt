@@ -42,6 +42,10 @@ class MutationTestSmokeTest {
             run.task(":mutationTest")?.outcome,
             "mutationTest did not succeed:\n${run.output}",
         )
+        assertTrue(run.output.contains("komust:") && run.output.contains("killed"), run.output)
+        assertTrue(run.output.contains("komust: report →") && run.output.contains("report.json"), run.output)
+        assertTrue(run.output.contains("komust: survivors →") && run.output.contains("survivors.json"), run.output)
+        assertTrue(run.output.contains("komust: human report →") && run.output.contains("report.txt"), run.output)
 
         val komustDir = dir.resolve("build/komust")
         val report = komustDir.resolve("report.json")
@@ -70,6 +74,14 @@ class MutationTestSmokeTest {
         val dryRun = gradle(dir, "check", "--dry-run")
         assertFalse(dryRun.output.contains(":mutationTest "), dryRun.output)
         assertFalse(dryRun.output.contains(":compileKomustKotlin "), dryRun.output)
+
+        val rerun = gradle(dir, "mutationTest", "--stacktrace")
+        assertEquals(TaskOutcome.UP_TO_DATE, rerun.task(":mutationTest")?.outcome, rerun.output)
+        assertTrue(
+            rerun.output.contains("komust: mutationTest is up-to-date — reports →") &&
+                rerun.output.contains("build/komust"),
+            rerun.output,
+        )
     }
 
     private fun gradle(dir: File, vararg args: String) =
