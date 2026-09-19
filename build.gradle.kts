@@ -1,5 +1,7 @@
+import io.komust.conventions.GenerateQualificationManifestTask
 import io.komust.conventions.VerifyCentralBundleTask
 import io.komust.conventions.VerifyReleaseDocumentationTask
+import io.komust.conventions.VerifyQualificationManifestTask
 import org.gradle.api.GradleException
 plugins {
     id("com.gradle.plugin-publish") version "2.2.1" apply false
@@ -103,6 +105,41 @@ tasks.register("stagePublications") {
         ":komust-engine:publishAllPublicationsToQualificationRepository",
         ":komust-gradle-plugin:publishAllPublicationsToQualificationRepository",
     )
+}
+
+val qualificationIdentity = providers.gradleProperty("komustPublicIdentity").map {
+    io.komust.conventions.PublicIdentity.named(it)
+}
+val qualificationRepository = layout.buildDirectory.dir("qualification-repository")
+val qualificationManifest = layout.buildDirectory.file("qualification/qualification-manifest.json")
+
+val generateQualificationManifest = tasks.register<GenerateQualificationManifestTask>("generateQualificationManifest") {
+    group = "publishing"
+    description = "Records the immutable commit, coordinates, names, sizes, and SHA-256s of the staged candidate."
+    dependsOn("stagePublications")
+    repository.set(qualificationRepository)
+    candidateCommit.set(providers.exec {
+        commandLine("git", "rev-parse", "HEAD")
+    }.standardOutput.asText.map(String::trim))
+    publicGroup.set(qualificationIdentity.map { it.group })
+    publicPluginId.set(qualificationIdentity.map { it.pluginId })
+    publicVersion.set(providers.gradleProperty("komustVersion"))
+    manifest.set(qualificationManifest)
+}
+
+tasks.register<VerifyQualificationManifestTask>("verifyQualificationManifest") {
+    group = "verification"
+    description = "Verifies staged or production publication bytes against the Qualification manifest."
+    dependsOn(generateQualificationManifest)
+    manifest.set(qualificationManifest)
+    repository.set(
+        providers.gradleProperty("qualificationRepository")
+            .map { layout.projectDirectory.dir(it) }
+            .orElse(qualificationRepository),
+    )
+    publicGroup.set(qualificationIdentity.map { it.group })
+    publicPluginId.set(qualificationIdentity.map { it.pluginId })
+    publicVersion.set(providers.gradleProperty("komustVersion"))
 }
 
 val isolatedConsumerDirectory = layout.projectDirectory.dir("qualification/isolated-consumer")
