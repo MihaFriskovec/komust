@@ -2,15 +2,12 @@ import io.komust.conventions.VerifyCentralBundleTask
 import org.gradle.api.GradleException
 plugins {
     id("com.gradle.plugin-publish") version "2.2.1" apply false
+    id("com.gradleup.nmcp.aggregation") version "1.6.2"
 }
 
 // Root build. Per-module configuration — coordinates, publishing, the Kotlin
 // toolchain — lives in the `komust.kotlin-module` convention plugin (buildSrc/),
 // which reads the atomic public identity / komustVersion from gradle.properties.
-plugins {
-    id("com.gradleup.nmcp.aggregation") version "1.6.2"
-}
-
 dependencies {
     nmcpAggregation(project(":komust-compiler-plugin"))
     nmcpAggregation(project(":komust-engine"))
@@ -105,4 +102,47 @@ tasks.register("stagePublications") {
         ":komust-engine:publishAllPublicationsToQualificationRepository",
         ":komust-gradle-plugin:publishAllPublicationsToQualificationRepository",
     )
+}
+
+val isolatedConsumerDirectory = layout.projectDirectory.dir("qualification/isolated-consumer")
+val isolatedConsumerGradleHome = layout.buildDirectory.dir("isolated-consumer-gradle-home")
+
+val cleanIsolatedConsumer = tasks.register<Delete>("cleanIsolatedConsumer") {
+    delete(isolatedConsumerDirectory.dir("build"), isolatedConsumerGradleHome)
+}
+
+tasks.register<Exec>("qualifyIsolatedConsumer") {
+    group = "verification"
+    description = "Qualifies the staged fixed-version publications through a fresh external Gradle consumer."
+    dependsOn("stagePublications", cleanIsolatedConsumer)
+
+    val candidateRepository = layout.buildDirectory.dir("qualification-repository")
+    val candidateVersion = providers.gradleProperty("komustVersion")
+    val candidateGroup = providers.gradleProperty("komustPublicIdentity").map {
+        io.komust.conventions.PublicIdentity.named(it).group
+    }
+    val candidatePluginId = providers.gradleProperty("komustPublicIdentity").map {
+        io.komust.conventions.PublicIdentity.named(it).pluginId
+    }
+
+    doFirst {
+        commandLine(
+            layout.projectDirectory.file("gradlew").asFile.absolutePath,
+            "-p", isolatedConsumerDirectory.asFile.absolutePath,
+            "--gradle-user-home", isolatedConsumerGradleHome.get().asFile.absolutePath,
+            "--no-daemon",
+            "--stacktrace",
+            "-PkomustCandidateRepository=${candidateRepository.get().asFile.absolutePath}",
+            "-PkomustCandidateVersion=${candidateVersion.get()}",
+            "-PkomustCandidateGroup=${candidateGroup.get()}",
+            "-PkomustCandidatePluginId=${candidatePluginId.get()}",
+            "-PkomustSchemaDirectory=${layout.projectDirectory.dir("schema").asFile.absolutePath}",
+            "clean",
+            "test",
+            "verifyCandidateResolution",
+            "mutationTest",
+            "--all",
+            "verifyKomustReports",
+        )
+    }
 }
