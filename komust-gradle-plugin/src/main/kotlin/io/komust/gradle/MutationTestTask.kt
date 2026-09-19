@@ -16,6 +16,7 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
 import org.gradle.process.ExecOperations
 import org.gradle.work.DisableCachingByDefault
+import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 
 /**
@@ -149,22 +150,31 @@ public abstract class MutationTestTask : DefaultTask() {
         val inputJson = out.resolve("engine-input.json")
         EngineInputWriter.write(inputJson, model)
 
+        val standardOutput = ByteArrayOutputStream()
+        val errorOutput = ByteArrayOutputStream()
         val result = exec.javaexec { spec ->
             spec.mainClass.set("io.komust.engine.EngineMainKt")
             spec.classpath = engineClasspath + runtimeGuardClasspath + classesUnderTest + testClassRoots +
                 testRuntimeClasspath + mainRuntimeClasspath
             spec.args(inputJson.absolutePath)
             spec.jvmArgs("-javaagent:${jacocoAgent.absolutePath}")
+            spec.standardOutput = standardOutput
+            spec.errorOutput = errorOutput
             spec.isIgnoreExitValue = true
         }
+        standardOutput.toString(Charsets.UTF_8).lineSequence()
+            .filter(String::isNotBlank)
+            .forEach(logger::lifecycle)
+        errorOutput.toString(Charsets.UTF_8).lineSequence()
+            .filter(String::isNotBlank)
+            .forEach(logger::error)
         val code = result.exitValue
         if (code != 0) {
             throw org.gradle.api.GradleException(
                 "komust: the mutation run exited with code $code — see the output above and " +
-                    "${outputDirectory.get().asFile.resolve("report.txt")}",
+                    "${outputDirectory.get().asFile}",
             )
         }
-        logger.lifecycle("komust: report → ${out.resolve("report.json")}")
     }
 
     /** `--tests` value → (global ids, per-file id sets). `path=a;b` segments are per-file; bare ids are global. */

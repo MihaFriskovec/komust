@@ -2,6 +2,7 @@ package io.komust.engine
 
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
+import kotlin.io.path.exists
 import kotlin.io.path.readText
 import kotlin.system.exitProcess
 
@@ -37,6 +38,9 @@ public fun main(args: Array<String>) {
             )
             println("komust: report → ${outcome.report.reportJson}")
             println("komust: survivors → ${outcome.report.survivorsJson}")
+            if (outcome.report.humanReport.exists()) {
+                println("komust: human report → ${outcome.report.humanReport}")
+            }
             exitProcess(0)
         }
 

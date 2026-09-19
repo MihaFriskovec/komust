@@ -127,8 +127,8 @@ komust {
         disable("increments")
     }
     output {
-        humanReport.set(true)            // human report rendered from the JSON (#5)
-        consoleSurvivorsOnly.set(true)   // token-dense survivor stream to console
+        humanReport.set(true)            // render report.txt from report.json (default: true)
+        consoleSurvivorsOnly.set(true)   // print survivor + no-coverage summary lines (default: false)
     }
     workers.set(Runtime.getRuntime().availableProcessors())  // (#7)
     timeoutFactor.set(1.5)               // baseline-relative timeout (#7)
@@ -140,6 +140,15 @@ komust {
 Deliberately **not** configurable in v1: the skip-list (built-in plus the
 `@SuppressMutations` / `// komust:ignore` hatch only, per #4) and the JSON
 output paths (fixed under `build/komust/`, per #5).
+
+The task always logs the killed / survived / no-coverage / timeout counts and
+the paths of the reports it wrote. When the task is up-to-date, it instead logs
+an explicit notice pointing at the existing `build/komust/` reports. Enabling
+`consoleSurvivorsOnly` additionally prints the rendered `summary` line for every
+entry in the `survivors.json` projection: survivors first, then no-coverage
+mutants, with each group retaining report order.
+Disabling `humanReport` omits `report.txt`; the two JSON artifacts remain
+unconditional.
 
 ## Consequences
 
