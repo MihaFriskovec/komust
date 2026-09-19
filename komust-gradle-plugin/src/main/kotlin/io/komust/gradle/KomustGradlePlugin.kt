@@ -139,6 +139,14 @@ public class KomustGradlePlugin : KotlinCompilerPluginSupportPlugin {
         }
 
         target.plugins.withId("org.jetbrains.kotlin.jvm") {
+            // `SuppressMutations` is part of the public consumer surface. Make
+            // the exact compiler-plugin artifact that owns the annotation
+            // visible to ordinary production compilation without leaking it
+            // onto the consumer's runtime classpath.
+            target.dependencies.add(
+                "compileOnly",
+                "$pluginGroup:komust-compiler-plugin:$komustVersion",
+            )
             wireMutationCompilation(target)
         }
     }

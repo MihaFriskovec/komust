@@ -131,7 +131,10 @@ class MutationTestSmokeTest {
             """
             package fixture
 
+            import io.komust.runtime.SuppressMutations
+
             class Calc {
+                @SuppressMutations
                 fun add(a: Int, b: Int): Int = a + b
                 fun scale(a: Int, b: Int): Int = a * b
             }
@@ -163,7 +166,10 @@ class MutationTestSmokeTest {
             """
             package fixture
 
+            import io.komust.runtime.SuppressMutations
+
             class Calc {
+                @SuppressMutations
                 fun add(a: Int, b: Int): Int = a + b
                 fun scale(a: Int, b: Int): Int = b * a
             }
