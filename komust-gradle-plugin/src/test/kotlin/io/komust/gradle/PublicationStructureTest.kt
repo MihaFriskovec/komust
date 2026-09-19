@@ -23,19 +23,7 @@ class PublicationStructureTest {
 
     @Test
     fun `staged repository contains one marker and four implementation publications in lockstep`() {
-        val expected = setOf(
-            "$pluginId.gradle.plugin",
-            "komust-gradle-plugin",
-            "komust-compiler-plugin",
-            "komust-engine",
-            "komust-scope",
-        )
-
-        val stagedArtifacts = Files.list(repository.resolve(group.replace('.', '/'))).use { paths ->
-            paths.filter(Files::isDirectory).map { it.name }.toList().toSet()
-        }
-        assertEquals(expected, stagedArtifacts)
-        expected.forEach { artifact ->
+        implementationArtifacts.forEach { artifact ->
             val directory = publicationDirectory(artifact)
             assertTrue(directory.exists(), "missing $group:$artifact:$version")
             val pom = singleFile(directory, ".pom")
@@ -43,12 +31,15 @@ class PublicationStructureTest {
             assertEquals(artifact, pom.elementText("artifactId"))
             assertEquals(version, pom.elementText("version"))
         }
+        val marker = markerPom()
+        assertEquals(pluginId, marker.elementText("groupId"))
+        assertEquals("$pluginId.gradle.plugin", marker.elementText("artifactId"))
+        assertEquals(version, marker.elementText("version"))
     }
 
     @Test
     fun `implementation publications expose metadata and documentation artifacts`() {
-        (implementationArtifacts + "$pluginId.gradle.plugin").forEach { artifact ->
-            val directory = publicationDirectory(artifact)
+        (implementationArtifacts.map(::publicationDirectory) + listOf(markerPublicationDirectory())).forEach { directory ->
             val pom = singleFile(directory, ".pom")
             assertEquals("komust", pom.elementText("name"))
             assertTrue(pom.elementText("description").isNotBlank())
@@ -81,6 +72,14 @@ class PublicationStructureTest {
         }
     }
 
+    @Test
+    fun `plugin marker references the selected same version implementation`() {
+        assertEquals(
+            setOf(Dependency(group, "komust-gradle-plugin", version, "compile")),
+            dependencies(markerPom()).toSet(),
+        )
+    }
+
     private val implementationArtifacts = listOf(
         "komust-gradle-plugin",
         "komust-compiler-plugin",
@@ -88,8 +87,11 @@ class PublicationStructureTest {
         "komust-scope",
     )
 
-    private fun markerPom(): Path = pom("$pluginId.gradle.plugin")
+    private fun markerPom(): Path = singleFile(markerPublicationDirectory(), ".pom")
     private fun pom(artifact: String): Path = singleFile(publicationDirectory(artifact), ".pom")
+
+    private fun markerPublicationDirectory(): Path =
+        repository.resolve(pluginId.replace('.', '/')).resolve("$pluginId.gradle.plugin").resolve(version)
 
     private fun publicationDirectory(artifact: String): Path =
         repository.resolve(group.replace('.', '/')).resolve(artifact).resolve(version)
@@ -103,12 +105,31 @@ class PublicationStructureTest {
             .maxBy { Files.getLastModifiedTime(it).toMillis() }
 
     private fun firstPartyDependencies(pom: Path): Map<String, String> {
+        return dependencies(pom)
+            .filter { it.group == group }
+            .associate { it.artifact to it.scope }
+    }
+
+    private fun dependencies(pom: Path): List<Dependency> {
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(pom.toFile())
         val dependencies = document.getElementsByTagName("dependency")
         return (0 until dependencies.length).map { dependencies.item(it) as Element }
-            .filter { it.childText("groupId") == group }
-            .associate { it.childText("artifactId") to it.childTextOrNull("scope").orEmpty().ifBlank { "compile" } }
+            .map {
+                Dependency(
+                    group = it.childText("groupId"),
+                    artifact = it.childText("artifactId"),
+                    version = it.childTextOrNull("version"),
+                    scope = it.childTextOrNull("scope").orEmpty().ifBlank { "compile" },
+                )
+            }
     }
+
+    private data class Dependency(
+        val group: String,
+        val artifact: String,
+        val version: String?,
+        val scope: String,
+    )
 
     private fun Path.elementText(path: String): String {
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(toFile())

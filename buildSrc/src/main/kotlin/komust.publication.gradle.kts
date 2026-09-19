@@ -132,9 +132,15 @@ fun validateReleaseAuthority() {
     }
 }
 
+val validateReleaseAuthorityTask = tasks.register("validateReleaseAuthority") {
+    group = "publishing"
+    description = "Validates the checked-in version and public identity for a release-capable task."
+    doLast { validateReleaseAuthority() }
+}
+
 tasks.withType<PublishToMavenRepository>().configureEach {
     if (name.endsWith("ToQualificationRepository")) {
         dependsOn(cleanQualificationRepository)
-        doFirst { validateReleaseAuthority() }
+        dependsOn(validateReleaseAuthorityTask)
     }
 }

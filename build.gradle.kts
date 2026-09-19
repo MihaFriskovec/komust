@@ -1,5 +1,8 @@
 import io.komust.conventions.VerifyCentralBundleTask
 import org.gradle.api.GradleException
+plugins {
+    id("com.gradle.plugin-publish") version "2.2.1" apply false
+}
 
 // Root build. Per-module configuration — coordinates, publishing, the Kotlin
 // toolchain — lives in the `komust.kotlin-module` convention plugin (buildSrc/),

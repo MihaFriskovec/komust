@@ -40,6 +40,16 @@ class ReleaseVersionAuthorityTest {
     }
 
     @Test
+    fun `release validation rejects a command line identity override`() {
+        fixture("0.1.0-alpha.1")
+
+        val result = runner("validateReleaseAuthority", "-PkomustPublicIdentity=github-fallback")
+            .buildAndFail()
+
+        assertTrue(result.output.contains("Release identity must come unchanged from gradle.properties"))
+    }
+
+    @Test
     fun `qualification accepts a fixed checked in release candidate`() {
         fixture("0.1.0-alpha.1")
 
