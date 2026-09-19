@@ -3,6 +3,7 @@ import org.gradle.api.tasks.Delete
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import io.komust.conventions.PublicIdentity
+import io.komust.conventions.PublicDocumentation
 
 /**
  * Public-publication convention: one identity/version authority, complete Maven
@@ -44,11 +45,11 @@ publishing {
     publications.withType<MavenPublication>().configureEach {
         pom {
             name.set("komust")
-            description.set("Kotlin-native mutation testing for fast, actionable test-quality feedback.")
-            url.set("https://github.com/MihaFriskovec/komust")
+            description.set(PublicDocumentation.description)
+            url.set(PublicDocumentation.projectUrl)
             licenses {
                 license {
-                    name.set("Apache License, Version 2.0")
+                    name.set(PublicDocumentation.licenseName)
                     url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                     distribution.set("repo")
                 }

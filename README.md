@@ -1,6 +1,6 @@
 # komust
 
-Kotlin-native mutation testing for Kotlin/JVM — pitest for Kotlin, built AI-native.
+Kotlin-native mutation testing for fast, actionable test-quality feedback.
 
 komust operates at the **K2 compiler IR level**, not JVM bytecode. It weaves all
 mutants into a single compilation and switches them at runtime, so there is no
@@ -11,8 +11,9 @@ The primary output is `survivors.json` — a token-dense file listing only the
 actionable gaps in your test suite, each carrying a "write a test that does X"
 instruction sized for an AI agent's context window.
 
-> **Status:** `0.1.0-SNAPSHOT` — not published to Maven Central yet. Use a
-> composite build or `publishToMavenLocal` to consume.
+> **Alpha evaluation prerelease:** the public compatibility surface may change.
+> The repository currently builds `0.1.0-SNAPSHOT`, which is not published to
+> Maven Central yet. Use a composite build to consume development source.
 
 ## Features
 
@@ -217,4 +218,4 @@ engine input contract.
 
 ## License
 
-TBD
+komust is licensed under the [Apache License, Version 2.0](LICENSE).

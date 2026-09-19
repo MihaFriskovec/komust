@@ -1,4 +1,5 @@
 import io.komust.conventions.VerifyCentralBundleTask
+import io.komust.conventions.VerifyReleaseDocumentationTask
 import org.gradle.api.GradleException
 plugins {
     id("com.gradle.plugin-publish") version "2.2.1" apply false
@@ -111,7 +112,7 @@ val cleanIsolatedConsumer = tasks.register<Delete>("cleanIsolatedConsumer") {
     delete(isolatedConsumerDirectory.dir("build"), isolatedConsumerGradleHome)
 }
 
-tasks.register<Exec>("qualifyIsolatedConsumer") {
+val qualifyIsolatedConsumer = tasks.register<Exec>("qualifyIsolatedConsumer") {
     group = "verification"
     description = "Qualifies the staged fixed-version publications through a fresh external Gradle consumer."
     dependsOn("stagePublications", cleanIsolatedConsumer)
@@ -145,4 +146,27 @@ tasks.register<Exec>("qualifyIsolatedConsumer") {
             "verifyKomustReports",
         )
     }
+}
+
+val verifyReleaseDocumentation = tasks.register<VerifyReleaseDocumentationTask>("verifyReleaseDocumentation") {
+    group = "verification"
+    description = "Verifies that public documentation and release notes describe the fixed candidate exactly."
+    repositoryRoot.set(layout.projectDirectory)
+    documents.from("README.md", "CHANGELOG.md", "LICENSE", "komust-example/README.md")
+    publicVersion.set(providers.gradleProperty("komustVersion"))
+    publicIdentityName.set(providers.gradleProperty("komustPublicIdentity"))
+    githubReleaseNotes.set(layout.buildDirectory.file("release/notes.md"))
+}
+
+qualifyIsolatedConsumer.configure {
+    dependsOn(verifyReleaseDocumentation)
+}
+tasks.named("stagePublications") {
+    mustRunAfter(verifyReleaseDocumentation)
+}
+
+tasks.register("qualifyReleaseDocumentation") {
+    group = "verification"
+    description = "Qualifies release notes and executes documented installation and example behavior against the staged candidate."
+    dependsOn(qualifyIsolatedConsumer)
 }
